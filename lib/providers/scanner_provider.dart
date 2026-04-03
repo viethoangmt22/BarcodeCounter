@@ -210,32 +210,28 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> _handleValid() async {
     totalValidCount += 1;
-    bagCount += 1;
-    boxCount += 1;
+    bagCount = totalValidCount % config.bagTarget;
+    boxCount = totalValidCount % config.boxTarget;
     status = ScanResultStatus.ok;
     notifyListeners();
 
-    await ttsService.speak('OK con dê');
+    await ttsService.speak(config.okMessage);
 
-    if (bagCount >= config.bagTarget) {
-      bagCount = 0;
-      notifyListeners();
-      await ttsService.speak(
-        'Đủ ${config.bagTarget} cái rồi đóng túi nilon đi',
-      );
-    }
+    for (final level in config.alertLevels) {
+      if (level.quantity <= 0) {
+        continue;
+      }
 
-    if (totalValidCount % config.boxTarget == 0) {
-      boxCount = 0;
-      notifyListeners();
-      await ttsService.speak('Đủ ${config.boxTarget} cái rồi đóng thùng đi');
+      if (totalValidCount % level.quantity == 0) {
+        await ttsService.speak(level.message);
+      }
     }
   }
 
   Future<void> _handleInvalid() async {
     status = ScanResultStatus.ng;
     notifyListeners();
-    await ttsService.speak('NG NG NG. Sai tem giấy rồi');
+    await ttsService.speak(config.ngMessage);
     await pauseForNg();
   }
 
