@@ -21,7 +21,8 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     autoStart: false,
     facing: CameraFacing.back,
     torchEnabled: false,
-    detectionSpeed: DetectionSpeed.noDuplicates,
+    // Keep duplicate frames so we can enforce our own "2 consecutive hits" rule.
+    detectionSpeed: DetectionSpeed.normal,
     detectionTimeoutMs: 150,
     formats: [
       BarcodeFormat.code128,
@@ -33,6 +34,7 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   static const Duration _scanCooldown = Duration(milliseconds: 500);
   static const Duration _duplicateWindow = Duration(milliseconds: 1200);
+  static const Duration _sameCodeRearmGap = Duration(milliseconds: 900);
 
   int totalValidCount = 0;
   int bagCount = 0;
@@ -51,6 +53,8 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
   String? _candidateCode;
   int _candidateHits = 0;
   String? _lastProcessedCode;
+  String? _lockedCode;
+  DateTime _lockedCodeLastSeenAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   Future<void> start() async {
     if (scanningActive && !ngLocked) {
@@ -121,6 +125,17 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     lastScannedCode = code;
     notifyListeners();
 
+    // Anti-duplicate lock: after a code is accepted, require a short gap
+    // (barcode moved out of view) before allowing the same value again.
+    if (_lockedCode == code) {
+      final gap = now.difference(_lockedCodeLastSeenAt);
+      _lockedCodeLastSeenAt = now;
+      if (gap < _sameCodeRearmGap) {
+        return;
+      }
+      _lockedCode = null;
+    }
+
     if (_candidateCode == code) {
       _candidateHits += 1;
     } else {
@@ -142,6 +157,8 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _lastAcceptedAt = now;
     _lastProcessedAt = now;
     _lastProcessedCode = code;
+    _lockedCode = code;
+    _lockedCodeLastSeenAt = now;
 
     if (code == config.masterCode) {
       await _handleValid();
@@ -163,7 +180,9 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
 
-    return null;
+    // Some devices/formats may not provide reliable corner points.
+    // Fallback to first detected barcode to avoid "no response" behavior.
+    return capture.barcodes.first;
   }
 
   bool _isInsideCenterRoi(Barcode barcode, Size imageSize) {
@@ -229,6 +248,8 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _candidateCode = null;
     _candidateHits = 0;
     _lastProcessedCode = null;
+    _lockedCode = null;
+    _lockedCodeLastSeenAt = DateTime.fromMillisecondsSinceEpoch(0);
     _lastAcceptedAt = DateTime.fromMillisecondsSinceEpoch(0);
     _lastProcessedAt = DateTime.fromMillisecondsSinceEpoch(0);
     notifyListeners();
