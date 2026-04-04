@@ -37,6 +37,7 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const Duration _sameCodeRearmGap = Duration(milliseconds: 900);
 
   int totalValidCount = 0;
+  int totalInvalidCount = 0;
   int bagCount = 0;
   int boxCount = 0;
 
@@ -229,6 +230,7 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> _handleInvalid() async {
+    totalInvalidCount += 1;
     status = ScanResultStatus.ng;
     notifyListeners();
     await ttsService.speak(config.ngMessage);
@@ -237,6 +239,7 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void resetCounters() {
     totalValidCount = 0;
+    totalInvalidCount = 0;
     bagCount = 0;
     boxCount = 0;
     lastScannedCode = '-';

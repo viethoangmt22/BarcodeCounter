@@ -76,22 +76,16 @@ class _ScannerView extends StatelessWidget {
                     children: [
                       Expanded(
                         child: _InfoTile(
-                          title: 'Total OK',
+                          title: 'OK Count',
                           value: provider.totalValidCount.toString(),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: _InfoTile(
-                          title: 'Bag count',
-                          value: provider.bagCount.toString(),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _InfoTile(
-                          title: 'Box count',
-                          value: provider.boxCount.toString(),
+                          title: 'NG Count',
+                          value: provider.totalInvalidCount.toString(),
+                          valueColor: Colors.red,
                         ),
                       ),
                     ],

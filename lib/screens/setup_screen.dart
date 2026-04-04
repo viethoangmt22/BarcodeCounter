@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../models/scan_config.dart';
 import '../services/prefs_service.dart';
@@ -134,6 +135,20 @@ class _SetupScreenState extends State<SetupScreen> {
     );
   }
 
+  Future<void> _scanAndFillMasterCode() async {
+    final scannedCode = await Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(builder: (_) => const _RegisterBarcodeScreen()),
+    );
+
+    if (!mounted || scannedCode == null || scannedCode.trim().isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _masterController.text = scannedCode.trim();
+    });
+  }
+
   @override
   void dispose() {
     _masterController.dispose();
@@ -158,19 +173,31 @@ class _SetupScreenState extends State<SetupScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    TextFormField(
-                      controller: _masterController,
-                      textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(
-                        labelText: 'Master Barcode',
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Vui long nhap master barcode';
-                        }
-                        return null;
-                      },
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _masterController,
+                            textInputAction: TextInputAction.next,
+                            decoration: const InputDecoration(
+                              labelText: 'Master Barcode',
+                              border: OutlineInputBorder(),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Vui long nhap master barcode';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton.icon(
+                          onPressed: _scanAndFillMasterCode,
+                          icon: const Icon(Icons.qr_code_scanner),
+                          label: const Text('Quét mã'),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
@@ -292,6 +319,100 @@ class _SetupScreenState extends State<SetupScreen> {
                 ),
               ),
             ),
+    );
+  }
+}
+
+class _RegisterBarcodeScreen extends StatefulWidget {
+  const _RegisterBarcodeScreen();
+
+  @override
+  State<_RegisterBarcodeScreen> createState() => _RegisterBarcodeScreenState();
+}
+
+class _RegisterBarcodeScreenState extends State<_RegisterBarcodeScreen> {
+  final MobileScannerController _controller = MobileScannerController(
+    facing: CameraFacing.back,
+    detectionSpeed: DetectionSpeed.noDuplicates,
+    formats: const [
+      BarcodeFormat.code128,
+      BarcodeFormat.code39,
+      BarcodeFormat.qrCode,
+    ],
+  );
+
+  bool _captured = false;
+  bool _torchOn = false;
+
+  Future<void> _onDetect(BarcodeCapture capture) async {
+    if (_captured || capture.barcodes.isEmpty) {
+      return;
+    }
+
+    final code = (capture.barcodes.first.rawValue ?? '').trim();
+    if (code.isEmpty) {
+      return;
+    }
+
+    _captured = true;
+    await _controller.stop();
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.of(context).pop(code);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Quét mã để đăng ký'),
+        actions: [
+          IconButton(
+            onPressed: () async {
+              await _controller.toggleTorch();
+              if (!mounted) {
+                return;
+              }
+              setState(() {
+                _torchOn = !_torchOn;
+              });
+            },
+            icon: Icon(_torchOn ? Icons.flash_on : Icons.flash_off),
+          ),
+        ],
+      ),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          MobileScanner(
+            controller: _controller,
+            fit: BoxFit.cover,
+            onDetect: _onDetect,
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              color: Colors.black54,
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              child: const Text(
+                'Đưa mã vào khung camera. Hệ thống sẽ tự điền mã sau khi quét thành công.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
