@@ -10,6 +10,7 @@ class PrefsService {
   static const _okMessageKey = 'ok_message';
   static const _ngMessageKey = 'ng_message';
   static const _levelsKey = 'alert_levels';
+  static const _colorValueKey = 'color_value';
   static const _adminPasswordKey = 'admin_password';
   static const _presetsKey = 'scan_presets';
   static const _lastUsedPreset1Key = 'last_used_preset_1';
@@ -37,12 +38,14 @@ class PrefsService {
 
     final levelsRaw = prefs.getString(_levelsKey);
     final levels = _parseLevels(levelsRaw, prefs);
+    final colorValue = prefs.getInt(_colorValueKey);
 
     return ScanConfig(
       requiredCodes: requiredCodes,
       okMessage: okMessage,
       ngMessage: ngMessage,
       alertLevels: levels,
+      colorValue: colorValue,
     );
   }
 
@@ -143,6 +146,11 @@ class PrefsService {
       _levelsKey,
       jsonEncode(normalizedLevels.map((e) => e.toJson()).toList()),
     );
+    if (config.colorValue != null) {
+      await prefs.setInt(_colorValueKey, config.colorValue!);
+    } else {
+      await prefs.remove(_colorValueKey);
+    }
   }
 
   Future<String> getAdminPassword() async {

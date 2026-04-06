@@ -22,12 +22,14 @@ class ScanConfig {
     required this.okMessage,
     required this.ngMessage,
     required this.alertLevels,
+    this.colorValue,
   });
 
   final List<String> requiredCodes;
   final String okMessage;
   final String ngMessage;
   final List<ScanAlertLevel> alertLevels;
+  final int? colorValue;
 
   String get masterCode => requiredCodes.isNotEmpty ? requiredCodes.first : '';
 
@@ -62,6 +64,7 @@ class ScanConfig {
         ),
         ScanAlertLevel(quantity: 100, message: 'Đủ 100 cái rồi đóng thùng đi'),
       ],
+      colorValue: null,
     );
   }
 
@@ -71,6 +74,7 @@ class ScanConfig {
       'okMessage': okMessage,
       'ngMessage': ngMessage,
       'alertLevels': alertLevels.map((level) => level.toJson()).toList(),
+      'colorValue': colorValue,
     };
   }
 
@@ -97,6 +101,7 @@ class ScanConfig {
       okMessage: (json['okMessage'] as String?) ?? '',
       ngMessage: (json['ngMessage'] as String?) ?? '',
       alertLevels: levels.isEmpty ? ScanConfig.defaults().alertLevels : levels,
+      colorValue: json['colorValue'] as int?,
     );
   }
 }

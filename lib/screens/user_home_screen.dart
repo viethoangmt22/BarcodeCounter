@@ -162,6 +162,9 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                     subtitle: _config != null && _config!.requiredCodes.isNotEmpty
                         ? 'Mốc: ${_config!.alertLevels.map((l) => l.quantity).join(', ')}\nÂm thanh: ${_config!.okMessage}'
                         : null,
+                    colorBadge: _config?.colorValue != null
+                        ? Color(_config!.colorValue!)
+                        : null,
                   ),
                   const SizedBox(height: 12),
                   _InfoCard(
@@ -236,11 +239,12 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
 }
 
 class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.title, required this.value, this.subtitle});
+  const _InfoCard({required this.title, required this.value, this.subtitle, this.colorBadge});
 
   final String title;
   final String value;
   final String? subtitle;
+  final Color? colorBadge;
 
   @override
   Widget build(BuildContext context) {
@@ -256,13 +260,28 @@ class _InfoCard extends StatelessWidget {
         children: [
           Text(title, style: Theme.of(context).textTheme.labelMedium),
           const SizedBox(height: 6),
-          Text(
-            value,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  value,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+              if (colorBadge != null)
+                Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: colorBadge,
+                  ),
+                ),
+            ],
           ),
           if (subtitle != null) ...[
             const SizedBox(height: 4),

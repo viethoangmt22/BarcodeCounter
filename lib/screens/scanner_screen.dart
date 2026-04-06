@@ -58,48 +58,59 @@ class _ScannerView extends StatelessWidget {
           ),
           Expanded(
             flex: 5,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
+            child: Container(
+              color: config.colorValue != null ? Color(config.colorValue!) : null,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _InfoTile(
-                    title: 'Last code',
-                    value: provider.lastScannedCode,
-                  ),
-                  const SizedBox(height: 8),
-                  _InfoTile(
-                    title: 'Required',
-                    value: config.requiredCodes.isEmpty
-                        ? '(chua dang ky)'
-                        : config.requiredCodes.join(' + '),
-                  ),
-                  const SizedBox(height: 8),
-                  _InfoTile(
-                    title: 'Status',
-                    value: provider.statusLabel,
-                    valueColor: provider.statusColor,
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _InfoTile(
-                          title: 'OK Count',
-                          value: provider.totalValidCount.toString(),
-                        ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _InfoTile(
+                            title: 'Last code',
+                            value: provider.lastScannedCode,
+                          ),
+                          const SizedBox(height: 8),
+                          _InfoTile(
+                            title: 'Required',
+                            value: config.requiredCodes.isEmpty
+                                ? '(chua dang ky)'
+                                : config.requiredCodes.join(' + '),
+                          ),
+                          const SizedBox(height: 8),
+                          _InfoTile(
+                            title: 'Status',
+                            value: provider.statusLabel,
+                            valueColor: provider.statusColor,
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _InfoTile(
+                                  title: 'OK Count',
+                                  value: provider.totalValidCount.toString(),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _InfoTile(
+                                  title: 'NG Count',
+                                  value: provider.totalInvalidCount.toString(),
+                                  valueColor: Colors.red,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _InfoTile(
-                          title: 'NG Count',
-                          value: provider.totalInvalidCount.toString(),
-                          valueColor: Colors.red,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                  const Spacer(),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
@@ -135,6 +146,7 @@ class _ScannerView extends StatelessWidget {
                 ],
               ),
             ),
+          ),
           ),
         ],
       ),

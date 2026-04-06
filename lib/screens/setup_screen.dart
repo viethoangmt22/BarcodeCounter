@@ -39,8 +39,22 @@ class _SetupScreenState extends State<SetupScreen> {
   final List<_AlertLevelDraft> _levelDrafts = [];
   final List<ScanPreset> _presets = [];
 
+  static const List<Color> _presetColors = [
+    Colors.red,
+    Colors.orange,
+    Colors.amber,
+    Colors.green,
+    Colors.teal,
+    Colors.blue,
+    Colors.indigo,
+    Colors.purple,
+    Colors.pink,
+    Colors.brown,
+  ];
+
   bool _loading = true;
   int _requiredBarcodeCount = 1;
+  int? _selectedColorValue;
 
   @override
   void initState() {
@@ -83,6 +97,8 @@ class _SetupScreenState extends State<SetupScreen> {
           ),
         );
 
+      _selectedColorValue = config.colorValue;
+
       if (_levelDrafts.isEmpty) {
         _addAlertLevel();
         _addAlertLevel();
@@ -116,6 +132,8 @@ class _SetupScreenState extends State<SetupScreen> {
             ),
           ),
         );
+
+      _selectedColorValue = preset.config.colorValue;
 
       if (_levelDrafts.isEmpty) {
         _addAlertLevel();
@@ -205,6 +223,7 @@ class _SetupScreenState extends State<SetupScreen> {
       okMessage: okMessage,
       ngMessage: ngMessage,
       alertLevels: levels,
+      colorValue: _selectedColorValue,
     );
   }
 
@@ -320,6 +339,16 @@ class _SetupScreenState extends State<SetupScreen> {
                             children: [
                               Row(
                                 children: [
+                                  if (preset.config.colorValue != null)
+                                    Container(
+                                      margin: const EdgeInsets.only(right: 8),
+                                      width: 16,
+                                      height: 16,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: Color(preset.config.colorValue!),
+                                      ),
+                                    ),
                                   Expanded(
                                     child: Text(
                                       preset.name,
@@ -336,8 +365,9 @@ class _SetupScreenState extends State<SetupScreen> {
                                     preset.requiredCodes.length == 2
                                         ? 'Dual'
                                         : 'Single',
-                                    style:
-                                        Theme.of(context).textTheme.labelSmall,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.labelSmall,
                                   ),
                                 ],
                               ),
@@ -359,8 +389,10 @@ class _SetupScreenState extends State<SetupScreen> {
                                     child: OutlinedButton.icon(
                                       onPressed: () =>
                                           _applyPresetToForm(preset),
-                                      icon: const Icon(Icons.edit_outlined,
-                                          size: 18),
+                                      icon: const Icon(
+                                        Icons.edit_outlined,
+                                        size: 18,
+                                      ),
                                       label: const Text('Nap preset'),
                                     ),
                                   ),
@@ -371,8 +403,10 @@ class _SetupScreenState extends State<SetupScreen> {
                                       style: FilledButton.styleFrom(
                                         foregroundColor: Colors.red.shade700,
                                       ),
-                                      icon: const Icon(Icons.delete_outline,
-                                          size: 18),
+                                      icon: const Icon(
+                                        Icons.delete_outline,
+                                        size: 18,
+                                      ),
                                       label: const Text('Xoa'),
                                     ),
                                   ),
@@ -396,7 +430,8 @@ class _SetupScreenState extends State<SetupScreen> {
                       children: [
                         Text(
                           'CAU HÌNH PRESET DANG CHON',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
                                 color: Colors.blue.shade900,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -514,7 +549,10 @@ class _SetupScreenState extends State<SetupScreen> {
                               onPressed: () {
                                 setState(_addAlertLevel);
                               },
-                              icon: const Icon(Icons.add_circle_outline, size: 20),
+                              icon: const Icon(
+                                Icons.add_circle_outline,
+                                size: 20,
+                              ),
                               label: const Text('Them'),
                             ),
                           ],
@@ -541,30 +579,34 @@ class _SetupScreenState extends State<SetupScreen> {
                                         child: Text(
                                           '${index + 1}',
                                           style: const TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold),
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                         ),
                                       ),
                                       const SizedBox(width: 8),
                                       Expanded(
                                         child: Text(
                                           'Mốc SL${index + 1}',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleSmall,
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.titleSmall,
                                         ),
                                       ),
                                       if (_levelDrafts.length > 1)
                                         IconButton(
                                           onPressed: () {
                                             setState(() {
-                                              final removed =
-                                                  _levelDrafts.removeAt(index);
+                                              final removed = _levelDrafts
+                                                  .removeAt(index);
                                               removed.dispose();
                                             });
                                           },
-                                          icon: const Icon(Icons.remove_circle_outline,
-                                              size: 20, color: Colors.red),
+                                          icon: const Icon(
+                                            Icons.remove_circle_outline,
+                                            size: 20,
+                                            color: Colors.red,
+                                          ),
                                         ),
                                     ],
                                   ),
@@ -648,6 +690,52 @@ class _SetupScreenState extends State<SetupScreen> {
                           },
                         ),
                         const SizedBox(height: 24),
+                        Text(
+                          '4. Màu sắc nhận diện (hiển thị khi quét)',
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            InkWell(
+                              onTap: () => setState(() => _selectedColorValue = null),
+                              customBorder: const CircleBorder(),
+                              child: Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white,
+                                  border: Border.all(
+                                    color: _selectedColorValue == null ? Colors.black : Colors.grey.shade400,
+                                    width: _selectedColorValue == null ? 3 : 1,
+                                  ),
+                                ),
+                                child: const Icon(Icons.close, color: Colors.grey),
+                              ),
+                            ),
+                            ..._presetColors.map((color) => InkWell(
+                              onTap: () => setState(() => _selectedColorValue = color.value),
+                              customBorder: const CircleBorder(),
+                              child: Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: color,
+                                  border: Border.all(
+                                    color: _selectedColorValue == color.value ? Colors.black : Colors.transparent,
+                                    width: _selectedColorValue == color.value ? 3 : 1,
+                                  ),
+                                ),
+                                child: _selectedColorValue == color.value ? const Icon(Icons.check, color: Colors.white) : null,
+                              ),
+                            )),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
                         FilledButton.icon(
                           onPressed: _savePreset,
                           style: FilledButton.styleFrom(
@@ -686,8 +774,10 @@ class _SetupScreenState extends State<SetupScreen> {
                     ),
                     child: const Text(
                       'BẮT ĐẦU VỚI CẤU HÌNH TRÊN',
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),
