@@ -164,56 +164,45 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
 
-    if (config.requiresTwoCodes) {
-      final unexpected =
-          detectedCodes
-              .where((code) => !config.requiredCodes.contains(code))
-              .toList()
-            ..sort();
-      if (unexpected.isNotEmpty) {
-        final processingKey = 'ng:unexpected:${unexpected.join('|')}';
-
-        if (_lockedCode == processingKey) {
-          final lastSeen = _lastSeenByKey[processingKey];
-          if (lastSeen != null &&
-              now.difference(lastSeen) < _sameCodeRearmGap) {
-            _lastSeenByKey[processingKey] = now;
-            return;
-          }
-          _lockedCode = null;
-        }
-
-        if (_lastProcessedCode == processingKey &&
-            now.difference(_lastProcessedAt) < _duplicateWindow) {
-          return;
-        }
-
-        _lastAcceptedAt = now;
-        _lastProcessedAt = now;
-        _lastProcessedCode = processingKey;
-        _lockedCode = processingKey;
-        _lastSeenByKey[processingKey] = now;
-
-        await _handleInvalid();
-        return;
-      }
-    }
+    // In 2-barcode mode, do not fail-fast to NG on a single noisy frame
+    // that contains an unexpected decode. Let the common candidate pipeline
+    // decide NG after stabilization to avoid false NG while scanning correctly.
 
     final effectiveCodes = config.requiresTwoCodes
         ? _updateRecentCodes(detectedCodes, now)
         : detectedCodes.toSet();
     final frameSignature = detectedCodes.join('|');
-    final isValid = config.matchesDetectedCodes(effectiveCodes);
+    final unexpectedInFrame = config.requiresTwoCodes
+      ? detectedCodes
+          .where((code) => !config.requiredCodes.contains(code))
+          .toList()
+        : <String>[];
+    unexpectedInFrame.sort();
+    final hasUnexpectedInFrame = unexpectedInFrame.isNotEmpty;
+    final isMixedRequiredAndUnexpectedInFrame =
+      config.requiresTwoCodes &&
+      matchedRequiredInFrame > 0 &&
+      hasUnexpectedInFrame;
+    final isValid =
+      !isMixedRequiredAndUnexpectedInFrame &&
+      config.matchesDetectedCodes(effectiveCodes);
     final matchedRequired = config.requiredCodes
         .where((code) => effectiveCodes.contains(code))
         .length;
     final okProcessingKey = 'ok:${config.requiredCodes.join('|')}';
 
-    if (config.requiresTwoCodes && matchedRequired > 0 && !isValid) {
+    if (config.requiresTwoCodes &&
+      matchedRequired > 0 &&
+      !isValid &&
+      !hasUnexpectedInFrame) {
       return;
     }
 
-    final processingKey = isValid ? okProcessingKey : 'ng:$frameSignature';
+    final processingKey = isValid
+      ? okProcessingKey
+      : hasUnexpectedInFrame
+      ? 'ng:unexpected:${unexpectedInFrame.join('|')}'
+      : 'ng:$frameSignature';
     final lockedCodeCenter =
         !config.requiresTwoCodes && detectedCodes.length == 1
         ? _findCenterForCode(capture, detectedCodes.first)
