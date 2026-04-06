@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../models/scan_config.dart';
@@ -32,6 +33,21 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       _loading = true;
     });
 
+    final lastUsed = await _prefsService.getLastUsedPreset(_presetSampleCount);
+
+    if (!mounted) {
+      return;
+    }
+
+    if (lastUsed != null) {
+      setState(() {
+        _config = lastUsed.config;
+        _activePresetName = lastUsed.name;
+        _loading = false;
+      });
+      return;
+    }
+
     final config = await _prefsService.getScanConfig();
     if (!mounted) {
       return;
@@ -40,6 +56,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     setState(() {
       _config = config;
       _activePresetName = null;
+      _presetSampleCount = config.requiredCodes.length >= 2 ? 2 : 1;
       _loading = false;
     });
   }
@@ -100,6 +117,10 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       _activePresetName = preset.name;
     });
 
+    unawaited(_prefsService.saveLastUsedPreset(preset));
+
+    if (!mounted) return;
+
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('Đã nạp preset: ${preset.name}')));
@@ -138,6 +159,9 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                         (_config == null || _config!.requiredCodes.isEmpty
                             ? 'Chưa chọn preset'
                             : _config!.requiredCodes.join(' + ')),
+                    subtitle: _config != null && _config!.requiredCodes.isNotEmpty
+                        ? 'Mốc: ${_config!.alertLevels.map((l) => l.quantity).join(', ')}\nÂm thanh: ${_config!.okMessage}'
+                        : null,
                   ),
                   const SizedBox(height: 12),
                   _InfoCard(
@@ -159,10 +183,36 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                       ),
                     ],
                     selected: <int>{_presetSampleCount},
-                    onSelectionChanged: (selection) {
+                    onSelectionChanged: (selection) async {
+                      final newCount = selection.first;
+                      if (newCount == _presetSampleCount) return;
+
                       setState(() {
-                        _presetSampleCount = selection.first;
+                        _presetSampleCount = newCount;
                       });
+
+                      final lastUsed =
+                          await _prefsService.getLastUsedPreset(newCount);
+                      if (!mounted) return;
+
+                      if (lastUsed != null) {
+                        setState(() {
+                          _config = lastUsed.config;
+                          _activePresetName = lastUsed.name;
+                        });
+                      } else {
+                        // If no last used preset for this mode, maybe reset or keep?
+                        // USER says: "khi chưa quét preset thì sẽ sử dụng preset trước đó đã dùng"
+                        // So if NULL, we don't change it or load generic?
+                        // Let's at least clear the active name if it doesn't match the mode.
+                        if (_config != null &&
+                            _config!.requiredCodes.length != newCount) {
+                          setState(() {
+                            _activePresetName = null;
+                            _config = null;
+                          });
+                        }
+                      }
                     },
                   ),
                   const SizedBox(height: 8),
@@ -186,10 +236,11 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
 }
 
 class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.title, required this.value});
+  const _InfoCard({required this.title, required this.value, this.subtitle});
 
   final String title;
   final String value;
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -213,6 +264,15 @@ class _InfoCard extends StatelessWidget {
               context,
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              subtitle!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.grey.shade700,
+                  ),
+            ),
+          ],
         ],
       ),
     );

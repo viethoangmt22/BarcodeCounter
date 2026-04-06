@@ -3,6 +3,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../models/scan_config.dart';
 import '../services/prefs_service.dart';
+import '../services/scanner_utils.dart';
 import 'scanner_screen.dart';
 
 class _AlertLevelDraft {
@@ -292,121 +293,9 @@ class _SetupScreenState extends State<SetupScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  const Divider(height: 32),
                   Text(
-                    'Barcode can quet',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  SegmentedButton<int>(
-                    segments: const [
-                      ButtonSegment<int>(
-                        value: 1,
-                        label: Text('Cần 1 barcode'),
-                      ),
-                      ButtonSegment<int>(
-                        value: 2,
-                        label: Text('Cần 2 barcode'),
-                      ),
-                    ],
-                    selected: <int>{_requiredBarcodeCount},
-                    onSelectionChanged: (selection) {
-                      final selected = selection.first;
-                      setState(() {
-                        _requiredBarcodeCount = selected;
-                        if (_requiredBarcodeCount == 1) {
-                          _barcode2Controller.clear();
-                        }
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _barcode1Controller,
-                          textInputAction: TextInputAction.next,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Barcode 1 (EAN-13)',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) => _validateEan13(
-                            value,
-                            emptyMessage: 'Vui lòng nhập barcode 1',
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      if (_requiredBarcodeCount == 1)
-                        FilledButton.icon(
-                          onPressed: () => _scanAndFillCodes(1),
-                          icon: const Icon(Icons.qr_code_scanner),
-                          label: const Text('Quét'),
-                        ),
-                    ],
-                  ),
-                  if (_requiredBarcodeCount == 2) ...[
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _barcode2Controller,
-                            textInputAction: TextInputAction.next,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'Barcode 2 (EAN-13)',
-                              border: OutlineInputBorder(),
-                            ),
-                            validator: (value) {
-                              final error = _validateEan13(
-                                value,
-                                emptyMessage: 'Vui lòng nhập barcode 2',
-                              );
-                              if (error != null) {
-                                return error;
-                              }
-
-                              if ((value?.trim() ?? '') ==
-                                  _barcode1Controller.text.trim()) {
-                                return 'Barcode 2 phải khác barcode 1';
-                              }
-
-                              return null;
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    FilledButton.icon(
-                      onPressed: () => _scanAndFillCodes(2),
-                      icon: const Icon(Icons.qr_code_scanner),
-                      label: const Text('Quét 2 mã cùng lúc'),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  Text(
-                    'Preset = Barcode can quet',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _requiredBarcodeCount == 2
-                        ? 'Ten preset: ${_barcode1Controller.text.trim()} + ${_barcode2Controller.text.trim()} / ${_barcode2Controller.text.trim()} + ${_barcode1Controller.text.trim()}'
-                        : 'Ten preset: ${_barcode1Controller.text.trim()}',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: _savePreset,
-                    icon: const Icon(Icons.save_outlined),
-                    label: const Text('Luu preset'),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Preset da luu',
+                    'Preset da luu (Library)',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
@@ -420,17 +309,48 @@ class _SetupScreenState extends State<SetupScreen> {
                       (preset) => Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Container(
-                          padding: const EdgeInsets.all(10),
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(color: Colors.grey.shade300),
+                            color: Colors.blueGrey.shade50.withOpacity(0.3),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      preset.name,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleSmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.indigo,
+                                          ),
+                                    ),
+                                  ),
+                                  Text(
+                                    preset.requiredCodes.length == 2
+                                        ? 'Dual'
+                                        : 'Single',
+                                    style:
+                                        Theme.of(context).textTheme.labelSmall,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
                               Text(
-                                preset.name,
-                                style: Theme.of(context).textTheme.titleSmall,
+                                'Milestones: ${preset.config.alertLevels.map((l) => l.quantity).join(', ')}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              Text(
+                                'OK Sound: ${preset.config.okMessage}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 8),
                               Row(
@@ -439,15 +359,20 @@ class _SetupScreenState extends State<SetupScreen> {
                                     child: OutlinedButton.icon(
                                       onPressed: () =>
                                           _applyPresetToForm(preset),
-                                      icon: const Icon(Icons.edit_outlined),
-                                      label: const Text('Sua'),
+                                      icon: const Icon(Icons.edit_outlined,
+                                          size: 18),
+                                      label: const Text('Nap preset'),
                                     ),
                                   ),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: FilledButton.tonalIcon(
                                       onPressed: () => _deletePreset(preset),
-                                      icon: const Icon(Icons.delete_outline),
+                                      style: FilledButton.styleFrom(
+                                        foregroundColor: Colors.red.shade700,
+                                      ),
+                                      icon: const Icon(Icons.delete_outline,
+                                          size: 18),
                                       label: const Text('Xoa'),
                                     ),
                                   ),
@@ -458,134 +383,286 @@ class _SetupScreenState extends State<SetupScreen> {
                         ),
                       ),
                     ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Moc so luong',
-                          style: Theme.of(context).textTheme.titleMedium,
+                  const SizedBox(height: 32),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50.withOpacity(0.4),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.blue.shade200),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'CAU HÌNH PRESET DANG CHON',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                color: Colors.blue.shade900,
+                                fontWeight: FontWeight.bold,
+                              ),
+                          textAlign: TextAlign.center,
                         ),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          setState(_addAlertLevel);
-                        },
-                        icon: const Icon(Icons.add),
-                        label: const Text('Them moc'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  ...List.generate(_levelDrafts.length, (index) {
-                    final level = _levelDrafts[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey.shade300),
+                        const SizedBox(height: 16),
+                        Text(
+                          '1. Barcode can quet',
+                          style: Theme.of(context).textTheme.titleSmall,
                         ),
-                        child: Column(
+                        const SizedBox(height: 8),
+                        SegmentedButton<int>(
+                          segments: const [
+                            ButtonSegment<int>(
+                              value: 1,
+                              label: Text('1 barcode'),
+                            ),
+                            ButtonSegment<int>(
+                              value: 2,
+                              label: Text('2 barcode'),
+                            ),
+                          ],
+                          selected: <int>{_requiredBarcodeCount},
+                          onSelectionChanged: (selection) {
+                            final selected = selection.first;
+                            setState(() {
+                              _requiredBarcodeCount = selected;
+                              if (_requiredBarcodeCount == 1) {
+                                _barcode2Controller.clear();
+                              }
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
                           children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'Mốc SL${index + 1}',
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleSmall,
-                                  ),
+                            Expanded(
+                              child: TextFormField(
+                                controller: _barcode1Controller,
+                                textInputAction: TextInputAction.next,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  labelText: 'Barcode 1 (EAN-13)',
+                                  border: OutlineInputBorder(),
+                                  filled: true,
+                                  fillColor: Colors.white,
                                 ),
-                                if (_levelDrafts.length > 2)
-                                  IconButton(
-                                    onPressed: () {
-                                      setState(() {
-                                        final removed = _levelDrafts.removeAt(
-                                          index,
-                                        );
-                                        removed.dispose();
-                                      });
-                                    },
-                                    icon: const Icon(Icons.delete_outline),
+                                validator: (value) => _validateEan13(
+                                  value,
+                                  emptyMessage: 'Vui lòng nhập barcode 1',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            if (_requiredBarcodeCount == 1)
+                              IconButton.filledTonal(
+                                onPressed: () => _scanAndFillCodes(1),
+                                icon: const Icon(Icons.qr_code_scanner),
+                                tooltip: 'Quét từ camera',
+                              ),
+                          ],
+                        ),
+                        if (_requiredBarcodeCount == 2) ...[
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _barcode2Controller,
+                                  textInputAction: TextInputAction.next,
+                                  keyboardType: TextInputType.number,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Barcode 2 (EAN-13)',
+                                    border: OutlineInputBorder(),
+                                    filled: true,
+                                    fillColor: Colors.white,
                                   ),
-                              ],
-                            ),
-                            TextFormField(
-                              controller: level.quantityController,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Số lượng (ví dụ 10, 100, 500)',
-                                border: OutlineInputBorder(),
+                                  validator: (value) {
+                                    final error = _validateEan13(
+                                      value,
+                                      emptyMessage: 'Vui lòng nhập barcode 2',
+                                    );
+                                    if (error != null) {
+                                      return error;
+                                    }
+
+                                    if ((value?.trim() ?? '') ==
+                                        _barcode1Controller.text.trim()) {
+                                      return 'Barcode 2 phải khác barcode 1';
+                                    }
+
+                                    return null;
+                                  },
+                                ),
                               ),
-                              validator: (value) {
-                                final parsed = int.tryParse(
-                                  value?.trim() ?? '',
-                                );
-                                if (parsed == null || parsed <= 0) {
-                                  return 'Số lượng phải là số > 0';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 8),
-                            TextFormField(
-                              controller: level.messageController,
-                              decoration: const InputDecoration(
-                                labelText: 'Nội dung âm thanh cảnh báo',
-                                border: OutlineInputBorder(),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          FilledButton.icon(
+                            onPressed: () => _scanAndFillCodes(2),
+                            icon: const Icon(Icons.qr_code_scanner),
+                            label: const Text('Quét 2 mã mẫu'),
+                          ),
+                        ],
+                        const SizedBox(height: 24),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '2. Moc so luong',
+                                style: Theme.of(context).textTheme.titleSmall,
                               ),
-                              validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
-                                  return 'Vui lòng nhập nội dung cảnh báo';
-                                }
-                                return null;
+                            ),
+                            TextButton.icon(
+                              onPressed: () {
+                                setState(_addAlertLevel);
                               },
+                              icon: const Icon(Icons.add_circle_outline, size: 20),
+                              label: const Text('Them'),
                             ),
                           ],
                         ),
-                      ),
-                    );
-                  }),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Am thanh',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _okMessageController,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Âm thanh khi quét đúng (OK)',
-                      border: OutlineInputBorder(),
+                        const SizedBox(height: 4),
+                        ...List.generate(_levelDrafts.length, (index) {
+                          final level = _levelDrafts[index];
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.grey.shade300),
+                              ),
+                              child: Column(
+                                children: [
+                                  Row(
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 12,
+                                        backgroundColor: Colors.blue.shade100,
+                                        child: Text(
+                                          '${index + 1}',
+                                          style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Mốc SL${index + 1}',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleSmall,
+                                        ),
+                                      ),
+                                      if (_levelDrafts.length > 1)
+                                        IconButton(
+                                          onPressed: () {
+                                            setState(() {
+                                              final removed =
+                                                  _levelDrafts.removeAt(index);
+                                              removed.dispose();
+                                            });
+                                          },
+                                          icon: const Icon(Icons.remove_circle_outline,
+                                              size: 20, color: Colors.red),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextFormField(
+                                    controller: level.quantityController,
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Số lượng (ví dụ 10, 100)',
+                                      isDense: true,
+                                      border: UnderlineInputBorder(),
+                                    ),
+                                    validator: (value) {
+                                      final parsed = int.tryParse(
+                                        value?.trim() ?? '',
+                                      );
+                                      if (parsed == null || parsed <= 0) {
+                                        return 'Phải là số > 0';
+                                      }
+                                      return null;
+                                    },
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextFormField(
+                                    controller: level.messageController,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Cảnh báo âm thanh',
+                                      isDense: true,
+                                      border: UnderlineInputBorder(),
+                                    ),
+                                    validator: (value) {
+                                      if (value == null ||
+                                          value.trim().isEmpty) {
+                                        return 'Vui lòng nhập âm thanh';
+                                      }
+                                      return null;
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }),
+                        const SizedBox(height: 16),
+                        Text(
+                          '3. Am thanh khac',
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _okMessageController,
+                          decoration: const InputDecoration(
+                            labelText: 'Âm thanh quét đúng (OK)',
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Vui lòng nhập';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _ngMessageController,
+                          decoration: const InputDecoration(
+                            labelText: 'Âm thanh quét sai (NG)',
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Vui lòng nhập';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 24),
+                        FilledButton.icon(
+                          onPressed: _savePreset,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Colors.indigo,
+                            minimumSize: const Size(double.infinity, 48),
+                          ),
+                          icon: const Icon(Icons.save),
+                          label: const Text('LUU VAO PRESET LIBRARY'),
+                        ),
+                      ],
                     ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Vui lòng nhập nội dung âm thanh OK';
-                      }
-                      return null;
-                    },
                   ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _ngMessageController,
-                    decoration: const InputDecoration(
-                      labelText: 'Âm thanh khi quét sai (NG)',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Vui lòng nhập nội dung âm thanh NG';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 48),
                   Text(
-                    'Bao mat admin',
+                    'Admin Security',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
@@ -593,15 +670,27 @@ class _SetupScreenState extends State<SetupScreen> {
                     controller: _adminPasswordController,
                     obscureText: true,
                     decoration: const InputDecoration(
-                      labelText: 'Đổi mật khẩu admin (bỏ trống nếu không đổi)',
+                      labelText: 'Đổi mật khẩu admin',
                       border: OutlineInputBorder(),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 32),
                   FilledButton(
                     onPressed: _startScanning,
-                    child: const Text('BẮT ĐẦU'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.green.shade700,
+                      minimumSize: const Size(double.infinity, 56),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'BẮT ĐẦU VỚI CẤU HÌNH TRÊN',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
                   ),
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
@@ -621,7 +710,8 @@ class _RegisterBarcodeScreen extends StatefulWidget {
 class _RegisterBarcodeScreenState extends State<_RegisterBarcodeScreen> {
   final MobileScannerController _controller = MobileScannerController(
     facing: CameraFacing.back,
-    detectionSpeed: DetectionSpeed.noDuplicates,
+    detectionSpeed: ScannerUtils.detectionSpeed,
+    detectionTimeoutMs: ScannerUtils.detectionTimeoutMs,
     formats: const [
       BarcodeFormat.ean13,
       BarcodeFormat.code128,
@@ -633,18 +723,34 @@ class _RegisterBarcodeScreenState extends State<_RegisterBarcodeScreen> {
   bool _captured = false;
   final List<String> _capturedCodes = [];
   bool _torchOn = false;
+  String? _candidateKey;
+  int _candidateHits = 0;
 
   Future<void> _onDetect(BarcodeCapture capture) async {
-    if (_captured || capture.barcodes.isEmpty) {
+    if (_captured) {
       return;
     }
 
-    for (final barcode in capture.barcodes) {
-      final code = (barcode.rawValue ?? '').trim();
-      if (code.isEmpty) {
-        continue;
-      }
+    final detected = ScannerUtils.pickDetectedCodes(capture);
+    if (detected.isEmpty) {
+      return;
+    }
 
+    final key = detected.join('|');
+    if (_candidateKey == key) {
+      _candidateHits++;
+    } else {
+      _candidateKey = key;
+      _candidateHits = 1;
+    }
+
+    if (_candidateHits < 2) {
+      return;
+    }
+
+    _candidateHits = 0;
+
+    for (final code in detected) {
       if (!_capturedCodes.contains(code)) {
         _capturedCodes.add(code);
       }

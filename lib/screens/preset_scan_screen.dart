@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import '../services/scanner_utils.dart';
 
 class PresetScanScreen extends StatefulWidget {
   const PresetScanScreen({required this.requiredCount, super.key});
@@ -13,7 +14,8 @@ class PresetScanScreen extends StatefulWidget {
 class _PresetScanScreenState extends State<PresetScanScreen> {
   final MobileScannerController _controller = MobileScannerController(
     facing: CameraFacing.back,
-    detectionSpeed: DetectionSpeed.noDuplicates,
+    detectionSpeed: ScannerUtils.detectionSpeed,
+    detectionTimeoutMs: ScannerUtils.detectionTimeoutMs,
     formats: const [
       BarcodeFormat.ean13,
       BarcodeFormat.code128,
@@ -22,84 +24,60 @@ class _PresetScanScreenState extends State<PresetScanScreen> {
     ],
   );
 
-  static const Duration _duplicateWindow = Duration(milliseconds: 1200);
-  static const Duration _requiredComboWindow = Duration(milliseconds: 900);
-
   bool _captured = false;
   bool _torchOn = false;
 
   String? _candidateKey;
   int _candidateHits = 0;
-  DateTime _lastProcessedAt = DateTime.fromMillisecondsSinceEpoch(0);
-  String? _lastProcessedKey;
   final Map<String, DateTime> _recentCodes = {};
 
   Future<void> _onDetect(BarcodeCapture capture) async {
-    if (_captured || capture.barcodes.isEmpty) {
+    if (_captured) {
       return;
     }
+
+    final detected = ScannerUtils.pickDetectedCodes(capture);
+    if (detected.isEmpty) {
+      return;
+    }
+
     final now = DateTime.now();
-    final codes = <String>{};
-    for (final barcode in capture.barcodes) {
-      final code = (barcode.rawValue ?? '').trim();
-      if (code.isNotEmpty) {
-        codes.add(code);
-      }
-    }
 
-    if (codes.isEmpty) {
-      return;
-    }
-
+    // Strategy for multi-code stabilization
     List<String> effectiveCodes;
     if (widget.requiredCount == 1) {
-      final sorted = codes.toList()..sort();
-      effectiveCodes = <String>[sorted.first];
+      effectiveCodes = [detected.first];
     } else {
-      for (final code in codes) {
+      for (final code in detected) {
         _recentCodes[code] = now;
       }
-
       _recentCodes.removeWhere(
-        (_, timestamp) => now.difference(timestamp) > _requiredComboWindow,
+        (_, timestamp) =>
+            now.difference(timestamp) > const Duration(milliseconds: 900),
       );
-
       effectiveCodes = _recentCodes.keys.toList()..sort();
       if (effectiveCodes.length < 2) {
         return;
       }
     }
 
-    final candidateKey = effectiveCodes.join('|');
-
-    if (widget.requiredCount == 2) {
-      if (_candidateKey == candidateKey) {
-        _candidateHits += 1;
-      } else {
-        _candidateKey = candidateKey;
-        _candidateHits = 1;
-      }
-
-      if (_candidateHits < 2) {
-        return;
-      }
+    final key = effectiveCodes.join('|');
+    if (_candidateKey == key) {
+      _candidateHits++;
+    } else {
+      _candidateKey = key;
+      _candidateHits = 1;
     }
 
-    if (_lastProcessedKey == candidateKey &&
-        now.difference(_lastProcessedAt) < _duplicateWindow) {
+    if (_candidateHits < 2) {
       return;
     }
 
-    _lastProcessedKey = candidateKey;
-    _lastProcessedAt = now;
-
+    _candidateHits = 0;
     _captured = true;
     await _controller.stop();
 
-    if (!mounted) {
-      return;
-    }
-
+    if (!mounted) return;
     Navigator.of(context).pop(effectiveCodes);
   }
 

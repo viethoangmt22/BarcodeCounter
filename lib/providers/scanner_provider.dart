@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../models/scan_config.dart';
+import '../services/scanner_utils.dart';
 import '../services/tts_service.dart';
 
 enum ScanResultStatus { idle, ok, ng }
@@ -22,9 +22,9 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     facing: CameraFacing.back,
     torchEnabled: false,
     // Use unlimited speed for faster response
-    detectionSpeed: DetectionSpeed.unrestricted,
+    detectionSpeed: ScannerUtils.detectionSpeed,
     detectionTimeoutMs:
-        100, // Reduced from 300ms to 100ms for faster detection
+        ScannerUtils.detectionTimeoutMs, // Reduced from 300ms to 100ms
     formats: [
       BarcodeFormat.ean13,
       BarcodeFormat.code128,
@@ -127,7 +127,7 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
-    final detectedCodes = _pickDetectedCodes(capture);
+    final detectedCodes = ScannerUtils.pickDetectedCodes(capture);
     if (detectedCodes.isEmpty) {
       return;
     }
@@ -286,62 +286,6 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     return _recentCodes.keys.toSet();
   }
 
-  List<String> _pickDetectedCodes(BarcodeCapture capture) {
-    final imageSize = capture.size;
-    if (capture.barcodes.isEmpty) {
-      return const [];
-    }
-
-    final centerCodes = <String>{};
-    for (final barcode in capture.barcodes) {
-      if (_isInsideCenterRoi(barcode, imageSize)) {
-        final value = (barcode.rawValue ?? '').trim();
-        if (value.isNotEmpty) {
-          centerCodes.add(value);
-        }
-      }
-    }
-
-    if (centerCodes.isNotEmpty) {
-      final values = centerCodes.toList()..sort();
-      return values;
-    }
-
-    // Some devices/formats may not provide reliable corner points.
-    // Fallback to all detected barcodes to avoid "no response" behavior.
-    final fallback =
-        capture.barcodes
-            .map((e) => (e.rawValue ?? '').trim())
-            .where((e) => e.isNotEmpty)
-            .toSet()
-            .toList()
-          ..sort();
-    return fallback;
-  }
-
-  bool _isInsideCenterRoi(Barcode barcode, Size imageSize) {
-    final corners = barcode.corners;
-    if (corners.isEmpty || imageSize.isEmpty) {
-      return false;
-    }
-
-    final minX = corners.map((p) => p.dx).reduce(min);
-    final maxX = corners.map((p) => p.dx).reduce(max);
-    final minY = corners.map((p) => p.dy).reduce(min);
-    final maxY = corners.map((p) => p.dy).reduce(max);
-
-    final center = Offset((minX + maxX) / 2, (minY + maxY) / 2);
-
-    final roiRect = Rect.fromLTWH(
-      imageSize.width * 0.25,
-      imageSize.height * 0.25,
-      imageSize.width * 0.5,
-      imageSize.height * 0.5,
-    );
-
-    return roiRect.contains(center);
-  }
-
   Offset? _findCenterForCode(BarcodeCapture capture, String code) {
     final imageSize = capture.size;
     Offset? fallbackCenter;
@@ -357,7 +301,7 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
         continue;
       }
 
-      if (!imageSize.isEmpty && _isInsideCenterRoi(barcode, imageSize)) {
+      if (!imageSize.isEmpty && ScannerUtils.isInsideCenterRoi(barcode, imageSize)) {
         return center;
       }
 
@@ -368,16 +312,7 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Offset? _barcodeCenter(Barcode barcode) {
-    final corners = barcode.corners;
-    if (corners.isEmpty) {
-      return null;
-    }
-
-    final minX = corners.map((p) => p.dx).reduce(min);
-    final maxX = corners.map((p) => p.dx).reduce(max);
-    final minY = corners.map((p) => p.dy).reduce(min);
-    final maxY = corners.map((p) => p.dy).reduce(max);
-    return Offset((minX + maxX) / 2, (minY + maxY) / 2);
+    return ScannerUtils.getBarcodeCenter(barcode);
   }
 
   bool _isSameSpot(Offset? first, Offset? second) {

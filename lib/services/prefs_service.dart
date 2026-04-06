@@ -12,6 +12,8 @@ class PrefsService {
   static const _levelsKey = 'alert_levels';
   static const _adminPasswordKey = 'admin_password';
   static const _presetsKey = 'scan_presets';
+  static const _lastUsedPreset1Key = 'last_used_preset_1';
+  static const _lastUsedPreset2Key = 'last_used_preset_2';
 
   static const _legacyBagTargetKey = 'bag_target';
   static const _legacyBoxTargetKey = 'box_target';
@@ -261,6 +263,37 @@ class PrefsService {
       _presetsKey,
       jsonEncode(updated.map((e) => e.toJson()).toList()),
     );
+  }
+
+  Future<void> saveLastUsedPreset(ScanPreset preset) async {
+    final prefs = await SharedPreferences.getInstance();
+    final count = preset.requiredCodes.length;
+    final signature = preset.signature;
+
+    if (count == 1) {
+      await prefs.setString(_lastUsedPreset1Key, signature);
+    } else if (count == 2) {
+      await prefs.setString(_lastUsedPreset2Key, signature);
+    }
+  }
+
+  Future<ScanPreset?> getLastUsedPreset(int barcodeCount) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = barcodeCount == 1 ? _lastUsedPreset1Key : _lastUsedPreset2Key;
+    final signature = prefs.getString(key);
+
+    if (signature == null || signature.isEmpty) {
+      return null;
+    }
+
+    final presets = await getPresets();
+    for (final preset in presets) {
+      if (preset.signature == signature) {
+        return preset;
+      }
+    }
+
+    return null;
   }
 
   String _signatureForCodes(List<String> codes) {
