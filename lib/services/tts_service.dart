@@ -20,9 +20,9 @@ class TtsService {
 
     _initialized = true;
     await _tts.setLanguage('vi-VN');
-    await _tts.setSpeechRate(0.45);
+    await _tts.setSpeechRate(0.55); // Increased from 0.45 to 0.55
     await _tts.setPitch(1.0);
-    await _tts.awaitSpeakCompletion(true);
+    await _tts.awaitSpeakCompletion(false); // Disabled for faster processing
 
     _tts.setCompletionHandler(() {
       _speaking = false;

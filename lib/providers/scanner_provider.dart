@@ -21,10 +21,10 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     autoStart: false,
     facing: CameraFacing.back,
     torchEnabled: false,
-    // Keep duplicate frames so we can enforce our own "2 consecutive hits" rule.
-    detectionSpeed: DetectionSpeed.normal,
+    // Use unlimited speed for faster response
+    detectionSpeed: DetectionSpeed.unrestricted,
     detectionTimeoutMs:
-        300, // Increased from 150ms to 300ms for better accuracy
+        100, // Reduced from 300ms to 100ms for faster detection
     formats: [
       BarcodeFormat.ean13,
       BarcodeFormat.code128,
@@ -34,17 +34,17 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     cameraResolution: const Size(1920, 1080),
   );
 
-  static const Duration _scanCooldown = Duration(milliseconds: 500);
-  static const Duration _duplicateWindow = Duration(milliseconds: 1200);
+  static const Duration _scanCooldown = Duration(milliseconds: 150);
+  static const Duration _duplicateWindow = Duration(milliseconds: 350);
   static const Duration _sameCodeRearmGap = Duration(
-    milliseconds: 600,
-  ); // Reduced from 900ms to 600ms
-  static const Duration _twoCodeClearGap = Duration(milliseconds: 1800);
+    milliseconds: 250,
+  ); // Reduced for faster re-scanning
+  static const Duration _twoCodeClearGap = Duration(milliseconds: 600);
   static const Duration _sameCodeFallbackGapWithoutCenter = Duration(
-    milliseconds: 1800,
+    milliseconds: 1200,
   );
   static const double _sameCodePositionTolerancePx = 36;
-  static const Duration _requiredComboWindow = Duration(milliseconds: 900);
+  static const Duration _requiredComboWindow = Duration(milliseconds: 600);
 
   int totalValidCount = 0;
   int totalInvalidCount = 0;
@@ -267,11 +267,11 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     if (isValid) {
-      await _handleValid();
+      unawaited(_handleValid());
       return;
     }
 
-    await _handleInvalid();
+    unawaited(_handleInvalid());
   }
 
   Set<String> _updateRecentCodes(Iterable<String> codes, DateTime now) {
@@ -395,7 +395,7 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     status = ScanResultStatus.ok;
     notifyListeners();
 
-    await ttsService.speak(config.okMessage);
+    unawaited(ttsService.speak(config.okMessage));
 
     for (final level in config.alertLevels) {
       if (level.quantity <= 0) {
@@ -403,7 +403,7 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
 
       if (totalValidCount % level.quantity == 0) {
-        await ttsService.speak(level.message);
+        unawaited(ttsService.speak(level.message));
       }
     }
   }
@@ -412,7 +412,7 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     totalInvalidCount += 1;
     status = ScanResultStatus.ng;
     notifyListeners();
-    await ttsService.speak(config.ngMessage);
+    unawaited(ttsService.speak(config.ngMessage));
     await pauseForNg();
   }
 
