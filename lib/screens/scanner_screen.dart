@@ -16,13 +16,15 @@ class ScannerScreen extends StatelessWidget {
     return ChangeNotifierProvider<ScannerProvider>(
       create: (_) =>
           ScannerProvider(config: config, ttsService: TtsService())..start(),
-      child: const _ScannerView(),
+      child: _ScannerView(config: config),
     );
   }
 }
 
 class _ScannerView extends StatelessWidget {
-  const _ScannerView();
+  const _ScannerView({required this.config});
+
+  final ScanConfig config;
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +66,13 @@ class _ScannerView extends StatelessWidget {
                   _InfoTile(
                     title: 'Last code',
                     value: provider.lastScannedCode,
+                  ),
+                  const SizedBox(height: 8),
+                  _InfoTile(
+                    title: 'Required',
+                    value: config.requiredCodes.isEmpty
+                        ? '(chua dang ky)'
+                        : config.requiredCodes.join(' + '),
                   ),
                   const SizedBox(height: 8),
                   _InfoTile(

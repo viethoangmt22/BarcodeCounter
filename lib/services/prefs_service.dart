@@ -6,16 +6,19 @@ import '../models/scan_config.dart';
 
 class PrefsService {
   static const _masterCodeKey = 'master_code';
+  static const _requiredCodesKey = 'required_codes';
   static const _okMessageKey = 'ok_message';
   static const _ngMessageKey = 'ng_message';
   static const _levelsKey = 'alert_levels';
+  static const _adminPasswordKey = 'admin_password';
+  static const _presetsKey = 'scan_presets';
 
   static const _legacyBagTargetKey = 'bag_target';
   static const _legacyBoxTargetKey = 'box_target';
 
   Future<String> getMasterCode() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_masterCodeKey) ?? '';
+    final config = await getScanConfig();
+    return config.masterCode;
   }
 
   Future<ScanConfig> getScanConfig() async {
@@ -23,6 +26,10 @@ class PrefsService {
 
     final defaults = ScanConfig.defaults();
     final masterCode = prefs.getString(_masterCodeKey) ?? '';
+    final requiredCodes = _parseRequiredCodes(
+      prefs.getString(_requiredCodesKey),
+      masterCode,
+    );
     final okMessage = prefs.getString(_okMessageKey) ?? defaults.okMessage;
     final ngMessage = prefs.getString(_ngMessageKey) ?? defaults.ngMessage;
 
@@ -30,11 +37,42 @@ class PrefsService {
     final levels = _parseLevels(levelsRaw, prefs);
 
     return ScanConfig(
-      masterCode: masterCode,
+      requiredCodes: requiredCodes,
       okMessage: okMessage,
       ngMessage: ngMessage,
       alertLevels: levels,
     );
+  }
+
+  List<String> _parseRequiredCodes(String? raw, String fallbackMasterCode) {
+    if (raw == null || raw.trim().isEmpty) {
+      final normalized = fallbackMasterCode.trim();
+      return normalized.isEmpty ? [] : [normalized];
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        final normalized = fallbackMasterCode.trim();
+        return normalized.isEmpty ? [] : [normalized];
+      }
+
+      final parsed = decoded
+          .map((e) => e.toString().trim())
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .toList();
+
+      if (parsed.isNotEmpty) {
+        return parsed;
+      }
+
+      final normalized = fallbackMasterCode.trim();
+      return normalized.isEmpty ? [] : [normalized];
+    } catch (_) {
+      final normalized = fallbackMasterCode.trim();
+      return normalized.isEmpty ? [] : [normalized];
+    }
   }
 
   List<ScanAlertLevel> _parseLevels(
@@ -84,15 +122,149 @@ class PrefsService {
 
   Future<void> saveSetup(ScanConfig config) async {
     final prefs = await SharedPreferences.getInstance();
+    final normalizedCodes = config.requiredCodes
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .toList();
     final normalizedLevels = [...config.alertLevels]
       ..sort((a, b) => a.quantity.compareTo(b.quantity));
 
-    await prefs.setString(_masterCodeKey, config.masterCode);
+    await prefs.setString(
+      _masterCodeKey,
+      normalizedCodes.isNotEmpty ? normalizedCodes.first : '',
+    );
+    await prefs.setString(_requiredCodesKey, jsonEncode(normalizedCodes));
     await prefs.setString(_okMessageKey, config.okMessage);
     await prefs.setString(_ngMessageKey, config.ngMessage);
     await prefs.setString(
       _levelsKey,
       jsonEncode(normalizedLevels.map((e) => e.toJson()).toList()),
     );
+  }
+
+  Future<String> getAdminPassword() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_adminPasswordKey) ?? '1234';
+  }
+
+  Future<void> setAdminPassword(String newPassword) async {
+    final normalized = newPassword.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_adminPasswordKey, normalized);
+  }
+
+  Future<List<ScanPreset>> getPresets() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_presetsKey);
+    if (raw == null || raw.trim().isEmpty) {
+      return const [];
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        return const [];
+      }
+
+      return decoded
+          .whereType<Map>()
+          .map(
+            (item) => item.map((key, value) => MapEntry(key.toString(), value)),
+          )
+          .map(ScanPreset.fromJson)
+          .where(
+            (preset) =>
+                preset.requiredCodes.isNotEmpty &&
+                preset.config.requiredCodes.isNotEmpty,
+          )
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<void> savePreset(ScanPreset preset) async {
+    final prefs = await SharedPreferences.getInstance();
+    final presets = await getPresets();
+    final normalizedCodes = preset.requiredCodes
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    if (normalizedCodes.isEmpty) {
+      return;
+    }
+
+    final signature = _signatureForCodes(normalizedCodes);
+
+    final updated = <ScanPreset>[
+      ...presets.where((item) => item.signature != signature),
+      ScanPreset(requiredCodes: normalizedCodes, config: preset.config),
+    ];
+
+    await prefs.setString(
+      _presetsKey,
+      jsonEncode(updated.map((e) => e.toJson()).toList()),
+    );
+  }
+
+  Future<ScanPreset?> findPresetBySampleCode(String sampleCode) async {
+    final normalized = sampleCode.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    return findPresetByRequiredCodes([normalized]);
+  }
+
+  Future<ScanPreset?> findPresetByRequiredCodes(
+    Iterable<String> requiredCodes,
+  ) async {
+    final normalizedCodes = requiredCodes
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    if (normalizedCodes.isEmpty) {
+      return null;
+    }
+
+    final signature = _signatureForCodes(normalizedCodes);
+    final presets = await getPresets();
+    for (final preset in presets) {
+      if (preset.signature == signature) {
+        return preset;
+      }
+    }
+    return null;
+  }
+
+  Future<void> deletePresetByRequiredCodes(
+    Iterable<String> requiredCodes,
+  ) async {
+    final normalizedCodes = requiredCodes
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    if (normalizedCodes.isEmpty) {
+      return;
+    }
+
+    final signature = _signatureForCodes(normalizedCodes);
+    final presets = await getPresets();
+    final updated = presets.where((preset) => preset.signature != signature);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _presetsKey,
+      jsonEncode(updated.map((e) => e.toJson()).toList()),
+    );
+  }
+
+  String _signatureForCodes(List<String> codes) {
+    final sorted = [...codes]..sort();
+    return sorted.join('|');
   }
 }

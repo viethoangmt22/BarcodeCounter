@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'screens/setup_screen.dart';
+import 'screens/user_home_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,7 +19,7 @@ class BarcodeCountApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0F766E)),
         useMaterial3: true,
       ),
-      home: const SetupScreen(),
+      home: const UserHomeScreen(),
     );
   }
 }

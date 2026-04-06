@@ -18,16 +18,33 @@ class ScanAlertLevel {
 
 class ScanConfig {
   const ScanConfig({
-    required this.masterCode,
+    required this.requiredCodes,
     required this.okMessage,
     required this.ngMessage,
     required this.alertLevels,
   });
 
-  final String masterCode;
+  final List<String> requiredCodes;
   final String okMessage;
   final String ngMessage;
   final List<ScanAlertLevel> alertLevels;
+
+  String get masterCode => requiredCodes.isNotEmpty ? requiredCodes.first : '';
+
+  bool get requiresTwoCodes => requiredCodes.length >= 2;
+
+  bool matchesDetectedCodes(Iterable<String> detectedCodes) {
+    final detectedSet = detectedCodes
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet();
+
+    if (requiredCodes.isEmpty) {
+      return false;
+    }
+
+    return requiredCodes.every(detectedSet.contains);
+  }
 
   int get bagTarget => alertLevels.isNotEmpty ? alertLevels.first.quantity : 10;
 
@@ -35,7 +52,7 @@ class ScanConfig {
 
   factory ScanConfig.defaults() {
     return const ScanConfig(
-      masterCode: '',
+      requiredCodes: [],
       okMessage: 'OK con dê',
       ngMessage: 'NG NG NG. Sai tem giấy rồi Bà Chị ơi',
       alertLevels: [
@@ -45,6 +62,110 @@ class ScanConfig {
         ),
         ScanAlertLevel(quantity: 100, message: 'Đủ 100 cái rồi đóng thùng đi'),
       ],
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'requiredCodes': requiredCodes,
+      'okMessage': okMessage,
+      'ngMessage': ngMessage,
+      'alertLevels': alertLevels.map((level) => level.toJson()).toList(),
+    };
+  }
+
+  factory ScanConfig.fromJson(Map<String, dynamic> json) {
+    final rawCodes = json['requiredCodes'];
+    final codes = rawCodes is List
+        ? rawCodes.map((e) => e.toString().trim()).where((e) => e.isNotEmpty)
+        : const <String>[];
+
+    final rawLevels = json['alertLevels'];
+    final levels = rawLevels is List
+        ? rawLevels
+              .whereType<Map>()
+              .map(
+                (item) =>
+                    item.map((key, value) => MapEntry(key.toString(), value)),
+              )
+              .map(ScanAlertLevel.fromJson)
+              .toList()
+        : const <ScanAlertLevel>[];
+
+    return ScanConfig(
+      requiredCodes: codes.toList(),
+      okMessage: (json['okMessage'] as String?) ?? '',
+      ngMessage: (json['ngMessage'] as String?) ?? '',
+      alertLevels: levels.isEmpty ? ScanConfig.defaults().alertLevels : levels,
+    );
+  }
+}
+
+class ScanPreset {
+  const ScanPreset({required this.requiredCodes, required this.config});
+
+  final List<String> requiredCodes;
+  final ScanConfig config;
+
+  String get name {
+    if (requiredCodes.length == 2) {
+      final first = requiredCodes[0];
+      final second = requiredCodes[1];
+      return '$first + $second / $second + $first';
+    }
+
+    return requiredCodes.join(' + ');
+  }
+
+  String get signature {
+    final sorted = requiredCodes.map((e) => e.trim()).toList()..sort();
+    return sorted.join('|');
+  }
+
+  Map<String, dynamic> toJson() {
+    return {'requiredCodes': requiredCodes, 'config': config.toJson()};
+  }
+
+  factory ScanPreset.fromJson(Map<String, dynamic> json) {
+    final rawCodes = json['requiredCodes'];
+    if (rawCodes is List) {
+      final parsedCodes = rawCodes
+          .map((e) => e.toString().trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+
+      return ScanPreset(
+        requiredCodes: parsedCodes,
+        config: json['config'] is Map
+            ? ScanConfig.fromJson(
+                (json['config'] as Map).map(
+                  (key, value) => MapEntry(key.toString(), value),
+                ),
+              )
+            : ScanConfig.defaults(),
+      );
+    }
+
+    final legacySample = (json['sampleCode'] as String?) ?? '';
+    final legacyCodes = legacySample.contains('|')
+        ? legacySample
+              .split('|')
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .toList()
+        : legacySample.trim().isEmpty
+        ? const <String>[]
+        : <String>[legacySample.trim()];
+
+    return ScanPreset(
+      requiredCodes: legacyCodes,
+      config: json['config'] is Map
+          ? ScanConfig.fromJson(
+              (json['config'] as Map).map(
+                (key, value) => MapEntry(key.toString(), value),
+              ),
+            )
+          : ScanConfig.defaults(),
     );
   }
 }
