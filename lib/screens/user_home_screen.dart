@@ -178,11 +178,11 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                     segments: const [
                       ButtonSegment<int>(
                         value: 1,
-                        label: Text('Quet 1 barcode'),
+                        label: Text('Quét 1 barcode'),
                       ),
                       ButtonSegment<int>(
                         value: 2,
-                        label: Text('Quet 2 barcode'),
+                        label: Text('Quét 2 barcode'),
                       ),
                     ],
                     selected: <int>{_presetSampleCount},

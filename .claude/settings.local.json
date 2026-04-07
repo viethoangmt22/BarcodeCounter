@@ -1,0 +1,8 @@
+{
+    "env": {
+        "ANTHROPIC_BASE_URL": "http://127.0.0.1:8045",
+        "ANTHROPIC_AUTH_TOKEN": "sk-c4d6251b2bce4c85a73cf9559e7f766c",
+        "ANTHROPIC_API_KEY": "",
+        "ANTHROPIC_MODEL": "gemini-3-flash"
+    }
+}

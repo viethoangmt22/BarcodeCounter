@@ -314,13 +314,13 @@ class _SetupScreenState extends State<SetupScreen> {
                 children: [
                   const Divider(height: 32),
                   Text(
-                    'Preset da luu (Library)',
+                    'Preset đã lưu (Library)',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
                   if (_presets.isEmpty)
                     Text(
-                      'Chua co preset',
+                      'Chưa có preset',
                       style: Theme.of(context).textTheme.bodyMedium,
                     )
                   else
@@ -393,7 +393,7 @@ class _SetupScreenState extends State<SetupScreen> {
                                         Icons.edit_outlined,
                                         size: 18,
                                       ),
-                                      label: const Text('Nap preset'),
+                                      label: const Text('Nạp preset'),
                                     ),
                                   ),
                                   const SizedBox(width: 8),
@@ -407,7 +407,7 @@ class _SetupScreenState extends State<SetupScreen> {
                                         Icons.delete_outline,
                                         size: 18,
                                       ),
-                                      label: const Text('Xoa'),
+                                      label: const Text('Xóa'),
                                     ),
                                   ),
                                 ],
@@ -429,7 +429,7 @@ class _SetupScreenState extends State<SetupScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          'CAU HÌNH PRESET DANG CHON',
+                          'CẤU HÌNH PRESET ĐANG CHỌN',
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(
                                 color: Colors.blue.shade900,
@@ -439,7 +439,7 @@ class _SetupScreenState extends State<SetupScreen> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          '1. Barcode can quet',
+                          '1. Barcode cần quét',
                           style: Theme.of(context).textTheme.titleSmall,
                         ),
                         const SizedBox(height: 8),
@@ -541,7 +541,7 @@ class _SetupScreenState extends State<SetupScreen> {
                           children: [
                             Expanded(
                               child: Text(
-                                '2. Moc so luong',
+                                '2. Mốc số lượng',
                                 style: Theme.of(context).textTheme.titleSmall,
                               ),
                             ),
@@ -553,7 +553,7 @@ class _SetupScreenState extends State<SetupScreen> {
                                 Icons.add_circle_outline,
                                 size: 20,
                               ),
-                              label: const Text('Them'),
+                              label: const Text('Thêm'),
                             ),
                           ],
                         ),
@@ -652,7 +652,7 @@ class _SetupScreenState extends State<SetupScreen> {
                         }),
                         const SizedBox(height: 16),
                         Text(
-                          '3. Am thanh khac',
+                          '3. Âm thanh khác',
                           style: Theme.of(context).textTheme.titleSmall,
                         ),
                         const SizedBox(height: 8),
@@ -743,7 +743,7 @@ class _SetupScreenState extends State<SetupScreen> {
                             minimumSize: const Size(double.infinity, 48),
                           ),
                           icon: const Icon(Icons.save),
-                          label: const Text('LUU VAO PRESET LIBRARY'),
+                          label: const Text('LƯU VÀO PRESET LIBRARY'),
                         ),
                       ],
                     ),

@@ -379,7 +379,7 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
       case ScanResultStatus.ng:
         return 'NG';
       case ScanResultStatus.idle:
-        return scanningActive ? 'SCANNING' : 'PAUSED';
+        return scanningActive ? 'ĐANG QUÉT' : 'TẠM DỪNG';
     }
   }
 

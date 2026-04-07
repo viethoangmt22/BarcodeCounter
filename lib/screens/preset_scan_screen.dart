@@ -93,8 +93,8 @@ class _PresetScanScreenState extends State<PresetScanScreen> {
       appBar: AppBar(
         title: Text(
           widget.requiredCount == 2
-              ? 'Quet ma mau 2 barcode'
-              : 'Quet ma mau 1 barcode',
+              ? 'Quét mã mẫu 2 barcode'
+              : 'Quét mã mẫu 1 barcode',
         ),
         actions: [
           IconButton(
@@ -127,8 +127,8 @@ class _PresetScanScreenState extends State<PresetScanScreen> {
               padding: const EdgeInsets.all(16),
               child: Text(
                 widget.requiredCount == 2
-                    ? 'Quet 2 barcode mau de nap preset.'
-                    : 'Quet 1 barcode mau de nap preset.',
+                    ? 'Quét 2 barcode mẫu để nạp preset.'
+                    : 'Quét 1 barcode mẫu để nạp preset.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.white),
               ),

@@ -71,19 +71,19 @@ class _ScannerView extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           _InfoTile(
-                            title: 'Last code',
+                            title: 'Mã cuối',
                             value: provider.lastScannedCode,
                           ),
                           const SizedBox(height: 8),
                           _InfoTile(
-                            title: 'Required',
+                            title: 'Yêu cầu',
                             value: config.requiredCodes.isEmpty
-                                ? '(chua dang ky)'
+                                ? '(chưa đăng ký)'
                                 : config.requiredCodes.join(' + '),
                           ),
                           const SizedBox(height: 8),
                           _InfoTile(
-                            title: 'Status',
+                            title: 'Trạng thái',
                             value: provider.statusLabel,
                             valueColor: provider.statusColor,
                           ),
@@ -92,14 +92,14 @@ class _ScannerView extends StatelessWidget {
                             children: [
                               Expanded(
                                 child: _InfoTile(
-                                  title: 'OK Count',
+                                  title: 'Số lượng OK',
                                   value: provider.totalValidCount.toString(),
                                 ),
                               ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: _InfoTile(
-                                  title: 'NG Count',
+                                  title: 'Số lượng NG',
                                   value: provider.totalInvalidCount.toString(),
                                   valueColor: Colors.red,
                                 ),
@@ -125,7 +125,7 @@ class _ScannerView extends StatelessWidget {
                       Expanded(
                         child: OutlinedButton(
                           onPressed: provider.resetCounters,
-                          child: const Text('RESET'),
+                          child: const Text('ĐẶT LẠI'),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -138,7 +138,7 @@ class _ScannerView extends StatelessWidget {
                             }
                             Navigator.of(context).pop();
                           },
-                          child: const Text('STOP'),
+                          child: const Text('DỪNG'),
                         ),
                       ),
                     ],
