@@ -23,6 +23,7 @@ class ScanConfig {
     required this.ngMessage,
     required this.alertLevels,
     this.colorValue,
+    this.productName,
   });
 
   final List<String> requiredCodes;
@@ -30,6 +31,7 @@ class ScanConfig {
   final String ngMessage;
   final List<ScanAlertLevel> alertLevels;
   final int? colorValue;
+  final String? productName;
 
   String get masterCode => requiredCodes.isNotEmpty ? requiredCodes.first : '';
 
@@ -65,6 +67,7 @@ class ScanConfig {
         ScanAlertLevel(quantity: 100, message: 'Đủ 100 cái rồi đóng thùng đi'),
       ],
       colorValue: null,
+      productName: null,
     );
   }
 
@@ -75,6 +78,7 @@ class ScanConfig {
       'ngMessage': ngMessage,
       'alertLevels': alertLevels.map((level) => level.toJson()).toList(),
       'colorValue': colorValue,
+      'productName': productName,
     };
   }
 
@@ -102,6 +106,7 @@ class ScanConfig {
       ngMessage: (json['ngMessage'] as String?) ?? '',
       alertLevels: levels.isEmpty ? ScanConfig.defaults().alertLevels : levels,
       colorValue: json['colorValue'] as int?,
+      productName: json['productName'] as String?,
     );
   }
 }
@@ -113,6 +118,10 @@ class ScanPreset {
   final ScanConfig config;
 
   String get name {
+    if (config.productName != null && config.productName!.isNotEmpty) {
+      return config.productName!;
+    }
+
     if (requiredCodes.length == 2) {
       final first = requiredCodes[0];
       final second = requiredCodes[1];

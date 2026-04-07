@@ -158,9 +158,11 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                         _activePresetName ??
                         (_config == null || _config!.requiredCodes.isEmpty
                             ? 'Chưa chọn preset'
-                            : _config!.requiredCodes.join(' + ')),
+                            : (_config!.productName != null && _config!.productName!.isNotEmpty
+                                ? _config!.productName!
+                                : _config!.requiredCodes.join(' + '))),
                     subtitle: _config != null && _config!.requiredCodes.isNotEmpty
-                        ? 'Mốc: ${_config!.alertLevels.map((l) => l.quantity).join(', ')}\nÂm thanh: ${_config!.okMessage}'
+                        ? '${(_config!.productName != null && _config!.productName!.isNotEmpty) ? 'Mã: ${_config!.requiredCodes.join(' + ')}\n' : ''}Mốc: ${_config!.alertLevels.map((l) => l.quantity).join(', ')}\nÂm thanh: ${_config!.okMessage}'
                         : null,
                     colorBadge: _config?.colorValue != null
                         ? Color(_config!.colorValue!)

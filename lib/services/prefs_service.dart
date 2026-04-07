@@ -273,6 +273,11 @@ class PrefsService {
     );
   }
 
+  Future<void> clearPresets() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_presetsKey);
+  }
+
   Future<void> saveLastUsedPreset(ScanPreset preset) async {
     final prefs = await SharedPreferences.getInstance();
     final count = preset.requiredCodes.length;

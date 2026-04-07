@@ -1,0 +1,52 @@
+HƯỚNG DẪN SỬ DỤNG: BARCODE COUNTER (BẢN V.2.0)
+Chào mừng bạn đến với hệ thống kiểm đếm và quản trị sản phẩm thông qua mã vạch. Tài liệu này sẽ hướng dẫn bạn từ khâu thiết lập ban đầu đến quản trị dữ liệu hàng loạt.
+
+1. Màn hình Chính (User Home Screen)
+Đây là giao diện làm việc hàng ngày của nhân viên.
+
+Chọn sản phẩm: Nhấn vào nút chọn để hiển thị danh sách các sản phẩm đã cấu hình. Khi chọn xong, màn hình sẽ đổi màu theo màu đặc trưng của sản phẩm đó.
+Quét Camera:
+Quét Đơn (Single): Chỉ cần quét đúng mã sản phẩm, máy sẽ tự động đếm.
+Quét Đôi (Dual): Bạn phải quét đủ 2 mã khác nhau (ví dụ: mã túi và mã thùng) thì hệ thống mới xác nhận là 1 đơn vị.
+Thông báo & Cảnh báo:
+Âm thanh: Máy sẽ đọc thông báo "OK" hoặc "SAI" (có thể tùy chỉnh).
+Rung: Phản hồi xúc giác khi quét thành công.
+Mốc số lượng: Khi đạt đến mốc đã cài đặt (ví dụ: 10, 100), máy sẽ đọc to lời nhắc: "Đủ mười cái rồi đóng túi đi".
+2. Thiết lập Sản phẩm (Barcode Setup)
+Để vào phần này, bạn cần nhấn biểu tượng Cài đặt và nhập mật khẩu quản trị (Mặc định: 1234).
+
+Bước 1: Quản lý danh sách (ListView)
+Màn hình hiển thị tất cả các thẻ sản phẩm đã lưu.
+Nhấn dấu [+] ở góc trên để tạo mới.
+Nhấn "Nạp & Chỉnh sửa" trên một thẻ để thay đổi thông tin.
+Bước 2: Cấu hình chi tiết (Form)
+Tên sản phẩm: Nhập tên gợi nhớ (ví dụ: Túi xách Nam Size M).
+Số lượng mã barcode: Chọn 1 hoặc 2 mã.
+Đăng ký mã: Bấm nút quét camera để nạp mã barcode mẫu vào hệ thống.
+Lời nhắn: Nhập câu lệnh mà bạn muốn máy đọc khi quét Đúng/Sai.
+Mốc số lượng (Alert Levels):
+Thêm các mốc như: 10 -> "Đóng túi nilon", 100 -> "Đóng thùng carton".
+Màu sắc: Chọn màu đại diện để dễ nhận biết lúc làm việc.
+3. Xuất và Nhập dữ liệu (CSV Export/Import)
+Đây là tính năng dành cho quản trị viên muốn quản lý hàng trăm mã sản phẩm trên máy tính.
+
+Xuất dữ liệu (Export)
+Vào Barcode Setup -> Nhấn menu (⋮) góc phải -> Xuất file CSV.
+Chọn thư mục muốn lưu trên điện thoại (ví dụ: Downloads) hoặc chia sẻ qua Zalo/Email.
+File này có thể mở trực tiếp bằng Excel trên máy tính với font chữ tiếng Việt chuẩn xác.
+Nhập dữ liệu (Import)
+Chỉnh sửa file CSV trên máy tính (thêm dòng, sửa tên, đổi mã).
+Gửi file lại điện thoại.
+Vào Barcode Setup -> menu (⋮) -> Nhập file CSV.
+Chọn file và xác nhận "Ghi đè". Toàn bộ cấu hình cũ sẽ được thay thế bằng dữ liệu mới từ file.
+IMPORTANT
+
+Lưu ý khi sửa file trên Excel:
+
+Cột Color: Chỉ sử dụng các tên màu: Đỏ, Cam, Vàng, Xanh lá, Xanh ngọc, Xanh dương, Xanh chàm, Tím, Hồng, Nâu.
+Cột Alert Levels: Định dạng Số:Lời nhắn (ví dụ: 50:Nửa thùng;100:Đầy thùng). Cách nhau bằng dấu chấm phẩy (;).
+4. Xử lý sự cố thường gặp
+Không nhận diện được mã: Kiểm tra độ sáng môi trường hoặc lau sạch mắt kính camera.
+Âm báo không kêu: Kiểm tra âm lượng truyền thông trên điện thoại.
+Lỗi nhập CSV: Đảm bảo file được lưu dưới dạng CSV (Comma Delimited) và không xóa hàng tiêu đề (Header).
+Barcode Counter - Đồng hành cùng kho vận thông minh.
