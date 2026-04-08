@@ -13,9 +13,6 @@ class PrefsService {
   static const _colorValueKey = 'color_value';
   static const _adminPasswordKey = 'admin_password';
   static const _presetsKey = 'scan_presets';
-  static const _lastUsedPreset1Key = 'last_used_preset_1';
-  static const _lastUsedPreset2Key = 'last_used_preset_2';
-
   static const _legacyBagTargetKey = 'bag_target';
   static const _legacyBoxTargetKey = 'box_target';
 
@@ -278,22 +275,17 @@ class PrefsService {
     await prefs.remove(_presetsKey);
   }
 
+  static const _lastUsedPresetGlobalKey = 'last_used_preset_global';
+  static const _countsPrefix = 'counts_';
+
   Future<void> saveLastUsedPreset(ScanPreset preset) async {
     final prefs = await SharedPreferences.getInstance();
-    final count = preset.requiredCodes.length;
-    final signature = preset.signature;
-
-    if (count == 1) {
-      await prefs.setString(_lastUsedPreset1Key, signature);
-    } else if (count == 2) {
-      await prefs.setString(_lastUsedPreset2Key, signature);
-    }
+    await prefs.setString(_lastUsedPresetGlobalKey, preset.signature);
   }
 
-  Future<ScanPreset?> getLastUsedPreset(int barcodeCount) async {
+  Future<ScanPreset?> getLastUsedPreset() async {
     final prefs = await SharedPreferences.getInstance();
-    final key = barcodeCount == 1 ? _lastUsedPreset1Key : _lastUsedPreset2Key;
-    final signature = prefs.getString(key);
+    final signature = prefs.getString(_lastUsedPresetGlobalKey);
 
     if (signature == null || signature.isEmpty) {
       return null;
@@ -307,6 +299,29 @@ class PrefsService {
     }
 
     return null;
+  }
+
+  Future<void> savePresetCounts(String signature, int ok, int ng) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_countsPrefix + signature, jsonEncode({'ok': ok, 'ng': ng}));
+  }
+
+  Future<Map<String, int>> getPresetCounts(String signature) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_countsPrefix + signature);
+    if (raw == null || raw.isEmpty) {
+      return {'ok': 0, 'ng': 0};
+    }
+
+    try {
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      return {
+        'ok': (decoded['ok'] as num?)?.toInt() ?? 0,
+        'ng': (decoded['ng'] as num?)?.toInt() ?? 0,
+      };
+    } catch (_) {
+      return {'ok': 0, 'ng': 0};
+    }
   }
 
   String _signatureForCodes(List<String> codes) {

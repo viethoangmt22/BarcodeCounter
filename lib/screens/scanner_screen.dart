@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/scan_config.dart';
 import '../providers/scanner_provider.dart';
 import '../services/tts_service.dart';
+import '../widgets/hold_to_reset_button.dart';
 
 class ScannerScreen extends StatelessWidget {
   const ScannerScreen({required this.config, super.key});
@@ -123,9 +124,8 @@ class _ScannerView extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: OutlinedButton(
-                          onPressed: provider.resetCounters,
-                          child: const Text('ĐẶT LẠI'),
+                        child: HoldToResetButton(
+                          onReset: provider.resetCounters,
                         ),
                       ),
                       const SizedBox(width: 8),

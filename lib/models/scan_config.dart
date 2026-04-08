@@ -38,16 +38,19 @@ class ScanConfig {
   bool get requiresTwoCodes => requiredCodes.length >= 2;
 
   bool matchesDetectedCodes(Iterable<String> detectedCodes) {
-    final detectedSet = detectedCodes
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toSet();
+    final detectedSet =
+        detectedCodes.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
 
     if (requiredCodes.isEmpty) {
       return false;
     }
 
     return requiredCodes.every(detectedSet.contains);
+  }
+
+  String get signature {
+    final sorted = requiredCodes.map((e) => e.trim()).toList()..sort();
+    return sorted.join('|');
   }
 
   int get bagTarget => alertLevels.isNotEmpty ? alertLevels.first.quantity : 10;

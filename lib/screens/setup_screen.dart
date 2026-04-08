@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -36,11 +37,11 @@ class _SetupScreenState extends State<SetupScreen> {
   final _okMessageController = TextEditingController();
   final _ngMessageController = TextEditingController();
   final _productNameController = TextEditingController();
-  final _adminPasswordController = TextEditingController();
   final _prefsService = PrefsService();
   final _csvService = CsvService();
   final List<_AlertLevelDraft> _levelDrafts = [];
   final List<ScanPreset> _presets = [];
+  List<File> _logFiles = [];
 
   static const List<Color> _presetColors = [
     Colors.red,
@@ -94,50 +95,64 @@ class _SetupScreenState extends State<SetupScreen> {
   }
 
   Future<void> _loadSaved() async {
-    final config = await _prefsService.getScanConfig();
-    final presets = await _prefsService.getPresets();
+    try {
+      final config = await _prefsService.getScanConfig();
+      final presets = await _prefsService.getPresets();
 
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _presets
-        ..clear()
-        ..addAll(presets);
-      final requiredCodes = config.requiredCodes;
-      _requiredBarcodeCount = requiredCodes.length >= 2 ? 2 : 1;
-      _barcode1Controller.text = requiredCodes.isNotEmpty
-          ? requiredCodes[0]
-          : '';
-      _barcode2Controller.text = requiredCodes.length >= 2
-          ? requiredCodes[1]
-          : '';
-      _okMessageController.text = config.okMessage;
-      _ngMessageController.text = config.ngMessage;
-      _productNameController.text = config.productName ?? '';
-      _levelDrafts
-        ..clear()
-        ..addAll(
-          config.alertLevels.map(
-            (level) => _AlertLevelDraft(
-              quantityController: TextEditingController(
-                text: level.quantity.toString(),
-              ),
-              messageController: TextEditingController(text: level.message),
-            ),
-          ),
-        );
-
-      _selectedColorValue = config.colorValue;
-
-      if (_levelDrafts.isEmpty) {
-        _addAlertLevel();
-        _addAlertLevel();
+      List<File> logFiles = [];
+      try {
+        logFiles = await _csvService.listLogFiles();
+      } catch (e) {
+        debugPrint('Lỗi tải danh mục nhật ký: $e');
       }
 
-      _loading = false;
-    });
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _presets
+          ..clear()
+          ..addAll(presets);
+        _logFiles = logFiles;
+        final requiredCodes = config.requiredCodes;
+        _requiredBarcodeCount = requiredCodes.length >= 2 ? 2 : 1;
+        _barcode1Controller.text = requiredCodes.isNotEmpty ? requiredCodes[0] : '';
+        _barcode2Controller.text =
+            requiredCodes.length >= 2 ? requiredCodes[1] : '';
+        _okMessageController.text = config.okMessage;
+        _ngMessageController.text = config.ngMessage;
+        _productNameController.text = config.productName ?? '';
+        _levelDrafts
+          ..clear()
+          ..addAll(
+            config.alertLevels.map(
+              (level) => _AlertLevelDraft(
+                quantityController: TextEditingController(
+                  text: level.quantity.toString(),
+                ),
+                messageController: TextEditingController(text: level.message),
+              ),
+            ),
+          );
+
+        _selectedColorValue = config.colorValue;
+
+        if (_levelDrafts.isEmpty) {
+          _addAlertLevel();
+          _addAlertLevel();
+        }
+
+        _loading = false;
+      });
+    } catch (e) {
+      debugPrint('Lỗi hệ thống khi tải setup: $e');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
   }
 
   void _applyPresetToForm(ScanPreset preset) {
@@ -217,10 +232,6 @@ class _SetupScreenState extends State<SetupScreen> {
 
     final config = _buildConfigFromInputs();
 
-    final newAdminPassword = _adminPasswordController.text.trim();
-    if (newAdminPassword.isNotEmpty) {
-      await _prefsService.setAdminPassword(newAdminPassword);
-    }
     await _prefsService.saveSetup(config);
 
     if (!mounted) {
@@ -387,6 +398,163 @@ class _SetupScreenState extends State<SetupScreen> {
     }
   }
 
+  Future<void> _exportLog(File file) async {
+    try {
+      await _csvService.exportLogFile(file);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi xuất file: $e')),
+      );
+    }
+  }
+
+  void _showLogsDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.history, color: Colors.indigo),
+                  SizedBox(width: 12),
+                  Text('Nhật ký quét'),
+                ],
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: _logFiles.isEmpty
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 32),
+                        child: Text(
+                          'Chưa có file nhật ký nào.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      )
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: _logFiles.length,
+                        itemBuilder: (context, index) {
+                          final file = _logFiles[index];
+                          final name = file.path.split(Platform.pathSeparator).last;
+                          final dateDisplay = name
+                              .replaceFirst('scans_', '')
+                              .replaceFirst('.csv', '');
+
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.description_outlined,
+                                color: Colors.amber),
+                            title: Text('Ngày $dateDisplay'),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.download, size: 20),
+                                  onPressed: () => _exportLog(file),
+                                  color: Colors.indigo,
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, size: 20),
+                                  onPressed: () async {
+                                    final confirm = await showDialog<bool>(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        title: const Text('Xác nhận xóa'),
+                                        content: const Text(
+                                            'Bạn có chắc chắn muốn xóa file này?'),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(context, false),
+                                            child: const Text('Hủy'),
+                                          ),
+                                          TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(context, true),
+                                            style: TextButton.styleFrom(
+                                                foregroundColor: Colors.red),
+                                            child: const Text('Xóa'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+
+                                    if (confirm == true) {
+                                      await _csvService.deleteLogFile(file);
+                                      final logs = await _csvService.listLogFiles();
+                                      setState(() {
+                                        _logFiles = logs;
+                                      });
+                                      setDialogState(() {
+                                        // Update logs for the dialog's ListView
+                                      });
+                                    }
+                                  },
+                                  color: Colors.red.shade400,
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Đóng'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showChangePasswordDialog() async {
+    final controller = TextEditingController();
+
+    if (!mounted) return;
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Đổi mật khẩu admin'),
+        content: TextField(
+          controller: controller,
+          obscureText: true,
+          decoration: const InputDecoration(
+            labelText: 'Mật khẩu mới',
+            hintText: 'Nhập mật khẩu mới tại đây',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Hủy'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Lưu'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result.isNotEmpty) {
+      await _prefsService.setAdminPassword(result);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đã cập nhật mật khẩu admin')),
+      );
+    }
+  }
+
+
   @override
   void dispose() {
     _barcode1Controller.dispose();
@@ -394,7 +562,6 @@ class _SetupScreenState extends State<SetupScreen> {
     _okMessageController.dispose();
     _ngMessageController.dispose();
     _productNameController.dispose();
-    _adminPasswordController.dispose();
     for (final draft in _levelDrafts) {
       draft.dispose();
     }
@@ -433,6 +600,10 @@ class _SetupScreenState extends State<SetupScreen> {
                 _exportToCsv();
               } else if (value == 'import') {
                 _importFromCsv();
+              } else if (value == 'logs') {
+                _showLogsDialog();
+              } else if (value == 'password') {
+                _showChangePasswordDialog();
               }
             },
             itemBuilder: (context) => [
@@ -442,7 +613,7 @@ class _SetupScreenState extends State<SetupScreen> {
                   children: [
                     Icon(Icons.ios_share_outlined, size: 20),
                     SizedBox(width: 8),
-                    Text('Xuất file CSV'),
+                    Text('Xuất file mã mẫu'),
                   ],
                 ),
               ),
@@ -452,7 +623,27 @@ class _SetupScreenState extends State<SetupScreen> {
                   children: [
                     Icon(Icons.file_open_outlined, size: 20),
                     SizedBox(width: 8),
-                    Text('Nhập file CSV'),
+                    Text('Nhập file mã mẫu'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'logs',
+                child: Row(
+                  children: [
+                    Icon(Icons.history_outlined, size: 20),
+                    SizedBox(width: 8),
+                    Text('Nhật ký quét'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'password',
+                child: Row(
+                  children: [
+                    Icon(Icons.lock_outline, size: 20),
+                    SizedBox(width: 8),
+                    Text('Đổi mật khẩu admin'),
                   ],
                 ),
               ),
@@ -460,139 +651,169 @@ class _SetupScreenState extends State<SetupScreen> {
           ),
         ],
       ),
-      body: _presets.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+      body: _buildListContent(),
+    );
+  }
+
+  Widget _buildListContent() {
+    final hasPresets = _presets.isNotEmpty;
+
+    if (!hasPresets) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.inventory_2_outlined,
+                size: 64, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            Text(
+              'Chưa có mã sản phẩm nào được lưu',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: _addNewConfig,
+              icon: const Icon(Icons.add),
+              label: const Text('Thêm cấu hình đầu tiên'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _buildSectionHeader(Icons.inventory_2_outlined, 'DANH SÁCH MÃ SẢN PHẨM'),
+        const SizedBox(height: 12),
+        ...List.generate(_presets.length, (index) {
+          final preset = _presets[index];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _buildPresetCard(preset),
+          );
+        }),
+        const SizedBox(height: 48),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader(IconData icon, String title) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: Colors.grey.shade700),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey.shade700,
+            letterSpacing: 1.1,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPresetCard(ScanPreset preset) {
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _applyPresetToForm(preset),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.inventory_2_outlined,
-                      size: 64, color: Colors.grey.shade400),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Chưa có mã sản phẩm nào được lưu',
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton.icon(
-                    onPressed: _addNewConfig,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Thêm cấu hình đầu tiên'),
-                  ),
-                ],
-              ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _presets.length,
-              itemBuilder: (context, index) {
-                final preset = _presets[index];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Card(
-                    elevation: 1,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(color: Colors.grey.shade200),
+                  if (preset.config.colorValue != null)
+                    Container(
+                      margin: const EdgeInsets.only(top: 2),
+                      width: 14,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Color(preset.config.colorValue!),
+                        border: Border.all(color: Colors.black26, width: 0.5),
+                      ),
                     ),
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      onTap: () => _applyPresetToForm(preset),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (preset.config.colorValue != null)
-                                  Container(
-                                    margin: const EdgeInsets.only(top: 2),
-                                    width: 14,
-                                    height: 14,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: Color(preset.config.colorValue!),
-                                      border: Border.all(
-                                          color: Colors.black26, width: 0.5),
-                                    ),
-                                  ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    preset.name,
-                                    style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.indigo,
-                                    ),
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue.shade50,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    preset.requiredCodes.length == 2
-                                        ? 'Dual Code'
-                                        : 'Single Code',
-                                    style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.blue.shade800,
-                                        fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            const Divider(height: 16),
-                            _buildInfoRow(Icons.qr_code, 'Mã barcode',
-                                preset.requiredCodes.join(' + ')),
-                            const SizedBox(height: 6),
-                            _buildInfoRow(
-                                Icons.notification_important_outlined,
-                                'Mốc số lượng',
-                                preset.config.alertLevels
-                                    .map((l) => '${l.quantity}')
-                                    .join(' - ')),
-                            const SizedBox(height: 6),
-                            _buildInfoRow(Icons.volume_up_outlined, 'Âm thanh OK',
-                                preset.config.okMessage,
-                                maxLines: 1),
-                            const SizedBox(height: 12),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                TextButton.icon(
-                                  onPressed: () => _deletePreset(preset),
-                                  icon: const Icon(Icons.delete_outline,
-                                      size: 18, color: Colors.red),
-                                  label: const Text('Xóa',
-                                      style: TextStyle(color: Colors.red)),
-                                  style: TextButton.styleFrom(
-                                      visualDensity: VisualDensity.compact),
-                                ),
-                                const SizedBox(width: 8),
-                                FilledButton.icon(
-                                  onPressed: () => _applyPresetToForm(preset),
-                                  icon: const Icon(Icons.edit_outlined, size: 18),
-                                  label: const Text('Nạp & Chỉnh sửa'),
-                                  style: FilledButton.styleFrom(
-                                      visualDensity: VisualDensity.compact),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      preset.name,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.indigo,
                       ),
                     ),
                   ),
-                );
-              },
-            ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      preset.requiredCodes.length == 2
+                          ? 'Dual Code'
+                          : 'Single Code',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.blue.shade800,
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Divider(height: 16),
+              _buildInfoRow(Icons.qr_code, 'Mã barcode',
+                  preset.requiredCodes.join(' + ')),
+              const SizedBox(height: 6),
+              _buildInfoRow(Icons.notification_important_outlined,
+                  'Mốc số lượng',
+                  preset.config.alertLevels.map((l) => '${l.quantity}').join(' - ')),
+              const SizedBox(height: 6),
+              _buildInfoRow(Icons.volume_up_outlined, 'Âm thanh OK',
+                  preset.config.okMessage,
+                  maxLines: 1),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    onPressed: () => _deletePreset(preset),
+                    icon: const Icon(Icons.delete_outline,
+                        size: 18, color: Colors.red),
+                    label:
+                        const Text('Xóa', style: TextStyle(color: Colors.red)),
+                    style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: () => _applyPresetToForm(preset),
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    label: const Text('Nạp & Chỉnh sửa'),
+                    style: FilledButton.styleFrom(
+                        visualDensity: VisualDensity.compact),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -975,20 +1196,6 @@ class _SetupScreenState extends State<SetupScreen> {
                     label: const Text('LƯU VÀO PRESET LIBRARY'),
                   ),
                 ],
-              ),
-            ),
-            const SizedBox(height: 48),
-            Text(
-              'Admin Security',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            TextFormField(
-              controller: _adminPasswordController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Đổi mật khẩu admin',
-                border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 32),

@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/material.dart';
 import 'package:csv/csv.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -163,5 +162,82 @@ class CsvService {
     }
 
     return presets;
+  }
+
+  /// Appends a single scan record to the daily CSV log.
+  /// Filename: scans_YYYY-MM-DD.csv
+  Future<void> appendScanLog({
+    required String barcode,
+    required String status,
+    required int count,
+    String? instruction,
+  }) async {
+    final now = DateTime.now();
+    final String dateStr =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    final String timeStr =
+        "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}";
+
+    final Directory docDir = await getApplicationDocumentsDirectory();
+    final String fileName = 'scans_$dateStr.csv';
+    final File file = File('${docDir.path}/$fileName');
+
+    final List<dynamic> row = [
+      timeStr,
+      barcode,
+      status,
+      count,
+      instruction ?? '',
+    ];
+
+    final String csvRow = const ListToCsvConverter().convert([row]) + '\r\n';
+
+    if (!await file.exists()) {
+      // New file: write BOM + headers first
+      final List<dynamic> header = [
+        'Thời gian',
+        'Mã barcode',
+        'Trạng thái',
+        'Lần quét',
+        'Hướng dẫn'
+      ];
+      final String headerCsv = '\uFEFF' + const ListToCsvConverter().convert([header]) + '\r\n';
+      await file.writeAsString(headerCsv + csvRow, encoding: utf8);
+    } else {
+      // Existing file: append row
+      await file.writeAsString(csvRow, mode: FileMode.append, encoding: utf8);
+    }
+  }
+
+  /// Lists all daily log files in the documents directory.
+  Future<List<File>> listLogFiles() async {
+    final Directory docDir = await getApplicationDocumentsDirectory();
+    if (!await docDir.exists()) return [];
+
+    final List<FileSystemEntity> entities = await docDir.list().toList();
+    final List<File> logs = entities
+        .whereType<File>()
+        .where((file) {
+          final name = file.path.split(Platform.pathSeparator).last;
+          return name.startsWith('scans_') && name.endsWith('.csv');
+        })
+        .toList();
+
+    // Sort by name (date) descending (newest first)
+    logs.sort((a, b) => b.path.compareTo(a.path));
+    return logs;
+  }
+
+  /// Exports a log file to a user-chosen location.
+  Future<void> exportLogFile(File file) async {
+    final params = SaveFileDialogParams(sourceFilePath: file.path);
+    await FlutterFileDialog.saveFile(params: params);
+  }
+
+  /// Deletes a log file.
+  Future<void> deleteLogFile(File file) async {
+    if (await file.exists()) {
+      await file.delete();
+    }
   }
 }

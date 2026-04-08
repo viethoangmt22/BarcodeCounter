@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../models/scan_config.dart';
+import '../services/csv_service.dart';
+import '../services/prefs_service.dart';
 import '../services/scanner_utils.dart';
 import '../services/tts_service.dart';
 
@@ -12,10 +14,25 @@ enum ScanResultStatus { idle, ok, ng }
 class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
   ScannerProvider({required this.config, required this.ttsService}) {
     WidgetsBinding.instance.addObserver(this);
+    _loadInitialCounts();
   }
 
   final ScanConfig config;
   final TtsService ttsService;
+  final _prefsService = PrefsService();
+  final _csvService = CsvService();
+
+  Future<void> _loadInitialCounts() async {
+    final counts = await _prefsService.getPresetCounts(config.signature);
+    totalValidCount = counts['ok'] ?? 0;
+    totalInvalidCount = counts['ng'] ?? 0;
+    
+    // Update bag/box counts based on loaded OK count
+    bagCount = totalValidCount % config.bagTarget;
+    boxCount = totalValidCount % config.boxTarget;
+    
+    notifyListeners();
+  }
 
   final MobileScannerController scannerController = MobileScannerController(
     autoStart: false,
@@ -331,16 +348,25 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
 
     unawaited(ttsService.speak(config.okMessage));
+    unawaited(_prefsService.savePresetCounts(config.signature, totalValidCount, totalInvalidCount));
 
+    String? instruction;
     for (final level in config.alertLevels) {
       if (level.quantity <= 0) {
         continue;
       }
-
       if (totalValidCount % level.quantity == 0) {
         unawaited(ttsService.speak(level.message));
+        instruction = level.message;
       }
     }
+
+    unawaited(_csvService.appendScanLog(
+      barcode: config.signature,
+      status: 'OK',
+      count: totalValidCount,
+      instruction: instruction,
+    ));
   }
 
   Future<void> _handleInvalid() async {
@@ -348,6 +374,14 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     status = ScanResultStatus.ng;
     notifyListeners();
     unawaited(ttsService.speak(config.ngMessage));
+    unawaited(_prefsService.savePresetCounts(config.signature, totalValidCount, totalInvalidCount));
+
+    unawaited(_csvService.appendScanLog(
+      barcode: lastScannedCode,
+      status: 'NG',
+      count: totalValidCount,
+    ));
+
     await pauseForNg();
   }
 
@@ -369,6 +403,7 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _lastAcceptedAt = DateTime.fromMillisecondsSinceEpoch(0);
     _lastProcessedAt = DateTime.fromMillisecondsSinceEpoch(0);
     _recentCodes.clear();
+    unawaited(_prefsService.savePresetCounts(config.signature, 0, 0));
     notifyListeners();
   }
 

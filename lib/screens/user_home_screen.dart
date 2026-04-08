@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../models/scan_config.dart';
 import '../services/prefs_service.dart';
+import '../widgets/hold_to_reset_button.dart';
 import 'admin_gate_screen.dart';
 import 'preset_scan_screen.dart';
 import 'scanner_screen.dart';
@@ -20,7 +21,8 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   bool _loading = true;
   ScanConfig? _config;
   String? _activePresetName;
-  int _presetSampleCount = 1;
+  int _currentOk = 0;
+  int _currentNg = 0;
 
   @override
   void initState() {
@@ -29,36 +31,51 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   }
 
   Future<void> _loadConfig() async {
-    setState(() {
-      _loading = true;
-    });
-
-    final lastUsed = await _prefsService.getLastUsedPreset(_presetSampleCount);
-
-    if (!mounted) {
-      return;
-    }
-
-    if (lastUsed != null) {
+    try {
       setState(() {
-        _config = lastUsed.config;
-        _activePresetName = lastUsed.name;
+        _loading = true;
+      });
+
+      final lastUsed = await _prefsService.getLastUsedPreset();
+
+      if (!mounted) {
+        return;
+      }
+
+      if (lastUsed != null) {
+        final counts =
+            await _prefsService.getPresetCounts(lastUsed.config.signature);
+        setState(() {
+          _config = lastUsed.config;
+          _activePresetName = lastUsed.name;
+          _currentOk = counts['ok'] ?? 0;
+          _currentNg = counts['ng'] ?? 0;
+          _loading = false;
+        });
+        return;
+      }
+
+      final config = await _prefsService.getScanConfig();
+      final counts = await _prefsService.getPresetCounts(config.signature);
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _config = config;
+        _activePresetName = null;
+        _currentOk = counts['ok'] ?? 0;
+        _currentNg = counts['ng'] ?? 0;
         _loading = false;
       });
-      return;
+    } catch (e) {
+      debugPrint('Error loading config: $e');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
     }
-
-    final config = await _prefsService.getScanConfig();
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _config = config;
-      _activePresetName = null;
-      _presetSampleCount = config.requiredCodes.length >= 2 ? 2 : 1;
-      _loading = false;
-    });
   }
 
   Future<void> _openAdmin() async {
@@ -71,9 +88,8 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     }
 
     if (unlocked == true) {
-      await Navigator.of(
-        context,
-      ).push(MaterialPageRoute<void>(builder: (_) => const SetupScreen()));
+      await Navigator.of(context)
+          .push(MaterialPageRoute<void>(builder: (_) => const SetupScreen()));
       await _loadConfig();
     }
   }
@@ -87,12 +103,13 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => ScannerScreen(config: config)),
     );
+    await _loadConfig(); // Refresh counts when back
   }
 
   Future<void> _scanPresetSample() async {
     final sampleCodes = await Navigator.of(context).push<List<String>>(
       MaterialPageRoute<List<String>>(
-        builder: (_) => PresetScanScreen(requiredCount: _presetSampleCount),
+        builder: (_) => const PresetScanScreen(),
       ),
     );
 
@@ -112,22 +129,40 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       return;
     }
 
+    final isNewCode = _config == null || preset.config.signature != _config!.signature;
+    
+    int ok = 0;
+    int ng = 0;
+    
+    if (isNewCode) {
+      // Mã mới: reset về 0
+      await _prefsService.savePresetCounts(preset.config.signature, 0, 0);
+    } else {
+      // Trùng mã: tiếp tục phiên làm việc (load counts hiện tại)
+      final counts = await _prefsService.getPresetCounts(preset.config.signature);
+      ok = counts['ok'] ?? 0;
+      ng = counts['ng'] ?? 0;
+    }
+
     setState(() {
       _config = preset.config;
       _activePresetName = preset.name;
+      _currentOk = ok;
+      _currentNg = ng;
     });
 
     unawaited(_prefsService.saveLastUsedPreset(preset));
 
     if (!mounted) return;
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('Đã nạp preset: ${preset.name}')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('Đã nạp preset: ${preset.name}')));
   }
 
   @override
   Widget build(BuildContext context) {
+    final hasConfig = _config != null && _config!.requiredCodes.isNotEmpty;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Barcode Counter'),
@@ -140,97 +175,80 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : Padding(
+          : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _InfoCard(
-                    title: 'Barcode đã đăng ký',
-                    value: _config == null || _config!.requiredCodes.isEmpty
-                        ? 'Chưa đăng ký'
-                        : _config!.requiredCodes.join(' + '),
-                  ),
-                  const SizedBox(height: 12),
-                  _InfoCard(
-                    title: 'Preset đang dùng',
-                    value:
-                        _activePresetName ??
-                        (_config == null || _config!.requiredCodes.isEmpty
-                            ? 'Chưa chọn preset'
-                            : (_config!.productName != null && _config!.productName!.isNotEmpty
-                                ? _config!.productName!
-                                : _config!.requiredCodes.join(' + '))),
-                    subtitle: _config != null && _config!.requiredCodes.isNotEmpty
-                        ? '${(_config!.productName != null && _config!.productName!.isNotEmpty) ? 'Mã: ${_config!.requiredCodes.join(' + ')}\n' : ''}Mốc: ${_config!.alertLevels.map((l) => l.quantity).join(', ')}\nÂm thanh: ${_config!.okMessage}'
-                        : null,
-                    colorBadge: _config?.colorValue != null
-                        ? Color(_config!.colorValue!)
-                        : null,
-                  ),
-                  const SizedBox(height: 12),
-                  _InfoCard(
-                    title: 'Trạng thái',
-                    value: _config == null || _config!.requiredCodes.isEmpty
-                        ? 'Cần admin đăng ký barcode'
-                        : 'Sẵn sàng quét',
-                  ),
-                  const Spacer(),
-                  SegmentedButton<int>(
-                    segments: const [
-                      ButtonSegment<int>(
-                        value: 1,
-                        label: Text('Quét 1 barcode'),
-                      ),
-                      ButtonSegment<int>(
-                        value: 2,
-                        label: Text('Quét 2 barcode'),
-                      ),
-                    ],
-                    selected: <int>{_presetSampleCount},
-                    onSelectionChanged: (selection) async {
-                      final newCount = selection.first;
-                      if (newCount == _presetSampleCount) return;
-
-                      setState(() {
-                        _presetSampleCount = newCount;
-                      });
-
-                      final lastUsed =
-                          await _prefsService.getLastUsedPreset(newCount);
-                      if (!mounted) return;
-
-                      if (lastUsed != null) {
+                  // Enlarged Preset Card
+                  _PresetDetailsCard(
+                    config: _config,
+                    activePresetName: _activePresetName,
+                    currentOk: _currentOk,
+                    currentNg: _currentNg,
+                    onReset: () async {
+                      if (_config != null) {
+                        unawaited(_prefsService.savePresetCounts(
+                            _config!.signature, 0, 0));
                         setState(() {
-                          _config = lastUsed.config;
-                          _activePresetName = lastUsed.name;
+                          _currentOk = 0;
+                          _currentNg = 0;
                         });
-                      } else {
-                        // If no last used preset for this mode, maybe reset or keep?
-                        // USER says: "khi chưa quét preset thì sẽ sử dụng preset trước đó đã dùng"
-                        // So if NULL, we don't change it or load generic?
-                        // Let's at least clear the active name if it doesn't match the mode.
-                        if (_config != null &&
-                            _config!.requiredCodes.length != newCount) {
-                          setState(() {
-                            _activePresetName = null;
-                            _config = null;
-                          });
-                        }
                       }
                     },
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 16),
+
+                  // Status Card with colors
+                  _StatusCard(
+                    isReady: hasConfig,
+                    message: hasConfig
+                        ? 'Sẵn sàng quét'
+                        : 'Chưa sẵn sàng (Cần nạp mã mẫu)',
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+      bottomNavigationBar: _loading
+          ? null
+          : Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                   OutlinedButton.icon(
                     onPressed: _scanPresetSample,
                     icon: const Icon(Icons.qr_code_scanner),
                     label: const Text('QUÉT MÃ MẪU (LOAD PRESET)'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                    ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   FilledButton(
-                    onPressed: _config == null || _config!.requiredCodes.isEmpty
-                        ? null
-                        : _startScanning,
+                    onPressed: !hasConfig ? null : _startScanning,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(64),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
                     child: const Text('BẮT ĐẦU QUÉT'),
                   ),
                 ],
@@ -240,58 +258,204 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   }
 }
 
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.title, required this.value, this.subtitle, this.colorBadge});
+class _PresetDetailsCard extends StatelessWidget {
+  const _PresetDetailsCard({
+    this.config,
+    this.activePresetName,
+    this.currentOk = 0,
+    this.currentNg = 0,
+    this.onReset,
+  });
 
-  final String title;
-  final String value;
-  final String? subtitle;
-  final Color? colorBadge;
+  final ScanConfig? config;
+  final String? activePresetName;
+  final int currentOk;
+  final int currentNg;
+  final VoidCallback? onReset;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasConfig = config != null && config!.requiredCodes.isNotEmpty;
+
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
-        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: [Colors.blue.shade50, Colors.white],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(color: Colors.blue.shade100),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: Theme.of(context).textTheme.labelMedium),
-          const SizedBox(height: 6),
           Row(
             children: [
-              Expanded(
-                child: Text(
-                  value,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              Icon(Icons.inventory_2_outlined, color: Colors.blue.shade700),
+              const SizedBox(width: 8),
+              Text(
+                'PRESET ĐANG DÙNG',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: Colors.blue.shade900,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
                 ),
               ),
-              if (colorBadge != null)
+              const Spacer(),
+              if (config?.colorValue != null)
                 Container(
-                  width: 16,
-                  height: 16,
+                  width: 24,
+                  height: 24,
                   decoration: BoxDecoration(
+                    color: Color(config!.colorValue!),
                     shape: BoxShape.circle,
-                    color: colorBadge,
+                    border: Border.all(color: Colors.white, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 4,
+                      ),
+                    ],
                   ),
                 ),
             ],
           ),
-          if (subtitle != null) ...[
-            const SizedBox(height: 4),
+          const SizedBox(height: 16),
+          Text(
+            activePresetName ??
+                (hasConfig ? (config!.productName ?? 'Tên n/a') : 'Chưa chọn preset'),
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: hasConfig ? Colors.black87 : Colors.grey.shade500,
+            ),
+          ),
+          if (hasConfig) ...[
+            const SizedBox(height: 8),
             Text(
-              subtitle!,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.grey.shade700,
+              'Mã: ${config!.requiredCodes.join(' + ')}',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: Colors.blue.shade900,
+              ),
+            ),
+            const Divider(height: 32),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Số lượng OK',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      Text(
+                        '$currentOk',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green.shade700,
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Số lượng NG',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      Text(
+                        '$currentNg',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (onReset != null) ...[
+              const SizedBox(height: 16),
+              HoldToResetButton(onReset: onReset!),
+            ],
+            const Divider(height: 32),
+            Text(
+              'CÁC MỐC CẢNH BÁO:',
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: Colors.grey.shade600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...config!.alertLevels.map(
+              (level) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade100,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.orange.shade200),
+                      ),
+                      child: Text(
+                        '${level.quantity}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orange.shade900,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          level.message,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            height: 1.3,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 24),
+            Center(
+              child: Text(
+                'Vui lòng quét mã mẫu để nạp cấu hình',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontStyle: FontStyle.italic,
+                  color: Colors.grey.shade600,
+                ),
+              ),
             ),
           ],
         ],
@@ -299,3 +463,65 @@ class _InfoCard extends StatelessWidget {
     );
   }
 }
+
+class _StatusCard extends StatelessWidget {
+  const _StatusCard({required this.isReady, required this.message});
+
+  final bool isReady;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final MaterialColor color = isReady ? Colors.green : Colors.red;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.2), width: 1.5),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isReady ? Icons.check_circle : Icons.error,
+              color: color,
+              size: 28,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'TRẠNG THÁI',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    color: color.withOpacity(0.7),
+                    letterSpacing: 1.1,
+                  ),
+                ),
+                Text(
+                  message,
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: color.shade900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
