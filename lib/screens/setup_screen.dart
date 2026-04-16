@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:path/path.dart' as p;
 
 import '../models/scan_config.dart';
 import '../services/prefs_service.dart';
@@ -409,7 +410,26 @@ class _SetupScreenState extends State<SetupScreen> {
     }
   }
 
-  void _showLogsDialog() {
+  Future<void> _showLogsDialog() async {
+    // Refresh log list before showing dialog
+    try {
+      final logs = await _csvService.listLogFiles();
+      if (mounted) {
+        setState(() {
+          _logFiles = logs;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Lỗi khi tải danh sách nhật ký: $e')),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+
     showDialog<void>(
       context: context,
       builder: (context) {
@@ -439,7 +459,7 @@ class _SetupScreenState extends State<SetupScreen> {
                         itemCount: _logFiles.length,
                         itemBuilder: (context, index) {
                           final file = _logFiles[index];
-                          final name = file.path.split(Platform.pathSeparator).last;
+                          final name = p.basename(file.path);
                           final dateDisplay = name
                               .replaceFirst('scans_', '')
                               .replaceFirst('.csv', '');
@@ -486,9 +506,11 @@ class _SetupScreenState extends State<SetupScreen> {
                                     if (confirm == true) {
                                       await _csvService.deleteLogFile(file);
                                       final logs = await _csvService.listLogFiles();
-                                      setState(() {
-                                        _logFiles = logs;
-                                      });
+                                      if (mounted) {
+                                        setState(() {
+                                          _logFiles = logs;
+                                        });
+                                      }
                                       setDialogState(() {
                                         // Update logs for the dialog's ListView
                                       });

@@ -41,14 +41,13 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // Use unlimited speed for faster response
     detectionSpeed: ScannerUtils.detectionSpeed,
     detectionTimeoutMs:
-        ScannerUtils.detectionTimeoutMs, // Reduced from 300ms to 100ms
+        ScannerUtils.detectionTimeoutMs, // Restored to detectionTimeoutMs for v7.2.0
     formats: [
       BarcodeFormat.ean13,
       BarcodeFormat.code128,
       BarcodeFormat.code39,
       BarcodeFormat.qrCode,
     ],
-    cameraResolution: const Size(1920, 1080),
   );
 
   static const Duration _scanCooldown = Duration(milliseconds: 150);
@@ -361,12 +360,16 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
 
-    unawaited(_csvService.appendScanLog(
-      barcode: config.signature,
-      status: 'OK',
-      count: totalValidCount,
-      instruction: instruction,
-    ));
+    try {
+      await _csvService.appendScanLog(
+        barcode: config.signature,
+        status: 'OK',
+        count: totalValidCount,
+        instruction: instruction,
+      );
+    } catch (e) {
+      debugPrint('Error logging OK: $e');
+    }
   }
 
   Future<void> _handleInvalid() async {
@@ -376,11 +379,15 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     unawaited(ttsService.speak(config.ngMessage));
     unawaited(_prefsService.savePresetCounts(config.signature, totalValidCount, totalInvalidCount));
 
-    unawaited(_csvService.appendScanLog(
-      barcode: lastScannedCode,
-      status: 'NG',
-      count: totalValidCount,
-    ));
+    try {
+      await _csvService.appendScanLog(
+        barcode: lastScannedCode,
+        status: 'NG',
+        count: totalValidCount,
+      );
+    } catch (e) {
+      debugPrint('Error logging NG: $e');
+    }
 
     await pauseForNg();
   }

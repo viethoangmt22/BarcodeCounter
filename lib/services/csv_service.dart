@@ -4,6 +4,8 @@ import 'package:csv/csv.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_file_dialog/flutter_file_dialog.dart';
+import 'package:path/path.dart' as p;
+import 'package:flutter/foundation.dart';
 
 import '../models/scan_config.dart';
 
@@ -73,7 +75,7 @@ class CsvService {
     }
 
     // Add UTF-8 BOM (\uFEFF) to tell Excel to open the file in UTF-8 encoding
-    final String csvData = '\uFEFF${const ListToCsvConverter().convert(rows)}';
+    final String csvData = '\uFEFF' + Csv().encode(rows);
     final Directory directory = await getTemporaryDirectory();
     final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
     final String fileName = 'barcode_presets_export_$timestamp.csv';
@@ -87,7 +89,7 @@ class CsvService {
 
   /// Picks a CSV file and parses it into ScanPresets.
   Future<List<ScanPreset>?> importPresets() async {
-    final FilePickerResult? result = await FilePicker.platform.pickFiles(
+    final FilePickerResult? result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv'],
     );
@@ -99,7 +101,7 @@ class CsvService {
     final File file = File(result.files.single.path!);
     final String content = await file.readAsString(encoding: utf8);
     final List<List<dynamic>> rows =
-        const CsvToListConverter(shouldParseNumbers: false).convert(content);
+        Csv(dynamicTyping: false).decode(content);
 
     if (rows.isEmpty) return [];
 
@@ -172,40 +174,52 @@ class CsvService {
     required int count,
     String? instruction,
   }) async {
-    final now = DateTime.now();
-    final String dateStr =
-        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-    final String timeStr =
-        "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}";
+    try {
+      final now = DateTime.now();
+      final String dateStr =
+          "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+      final String timeStr =
+          "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}";
 
-    final Directory docDir = await getApplicationDocumentsDirectory();
-    final String fileName = 'scans_$dateStr.csv';
-    final File file = File('${docDir.path}/$fileName');
+      final Directory docDir = await getApplicationDocumentsDirectory();
+      
+      // Ensure directory exists (critical for Android/Desktop on first run)
+      if (!await docDir.exists()) {
+        await docDir.create(recursive: true);
+      }
+      
+      final String fileName = 'scans_$dateStr.csv';
+      final File file = File(p.join(docDir.path, fileName));
 
-    final List<dynamic> row = [
-      timeStr,
-      barcode,
-      status,
-      count,
-      instruction ?? '',
-    ];
-
-    final String csvRow = const ListToCsvConverter().convert([row]) + '\r\n';
-
-    if (!await file.exists()) {
-      // New file: write BOM + headers first
-      final List<dynamic> header = [
-        'Thời gian',
-        'Mã barcode',
-        'Trạng thái',
-        'Lần quét',
-        'Hướng dẫn'
+      final List<dynamic> row = [
+        timeStr,
+        barcode,
+        status,
+        count,
+        instruction ?? '',
       ];
-      final String headerCsv = '\uFEFF' + const ListToCsvConverter().convert([header]) + '\r\n';
-      await file.writeAsString(headerCsv + csvRow, encoding: utf8);
-    } else {
-      // Existing file: append row
-      await file.writeAsString(csvRow, mode: FileMode.append, encoding: utf8);
+
+      final String csvRow = Csv().encode([row]) + '\r\n';
+
+      if (!await file.exists()) {
+        // New file: write BOM + headers first
+        final List<dynamic> header = [
+          'Thời gian',
+          'Mã barcode',
+          'Trạng thái',
+          'Lần quét',
+          'Hướng dẫn'
+        ];
+        final String headerCsv = '\uFEFF' + Csv().encode([header]) + '\r\n';
+        await file.writeAsString(headerCsv + csvRow, encoding: utf8);
+      } else {
+        // Existing file: append row
+        await file.writeAsString(csvRow, mode: FileMode.append, encoding: utf8);
+      }
+    } catch (e, stack) {
+      debugPrint('Error appending scan log: $e');
+      debugPrint(stack.toString());
+      rethrow;
     }
   }
 
@@ -218,7 +232,7 @@ class CsvService {
     final List<File> logs = entities
         .whereType<File>()
         .where((file) {
-          final name = file.path.split(Platform.pathSeparator).last;
+          final name = p.basename(file.path);
           return name.startsWith('scans_') && name.endsWith('.csv');
         })
         .toList();
