@@ -31,6 +31,9 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     bagCount = totalValidCount % config.bagTarget;
     boxCount = totalValidCount % config.boxTarget;
     
+    // Load previous global zoom level
+    zoomLevel = await _prefsService.getZoomLevel();
+    
     notifyListeners();
   }
 
@@ -101,6 +104,9 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     scanningActive = true;
     notifyListeners();
     await scannerController.start();
+    if (zoomLevel > 0) {
+      unawaited(scannerController.setZoomScale(zoomLevel));
+    }
   }
 
   Future<void> stop() async {
@@ -121,6 +127,9 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     status = ScanResultStatus.idle;
     notifyListeners();
     await scannerController.start();
+    if (zoomLevel > 0) {
+      unawaited(scannerController.setZoomScale(zoomLevel));
+    }
   }
 
   Future<void> pauseForNg() async {
@@ -141,6 +150,7 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     zoomLevel = level.clamp(0.0, 1.0);
     notifyListeners();
     unawaited(scannerController.setZoomScale(zoomLevel));
+    unawaited(_prefsService.saveZoomLevel(zoomLevel));
   }
 
   Future<void> onDetect(BarcodeCapture capture) async {

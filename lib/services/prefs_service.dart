@@ -15,6 +15,8 @@ class PrefsService {
   static const _presetsKey = 'scan_presets';
   static const _legacyBagTargetKey = 'bag_target';
   static const _legacyBoxTargetKey = 'box_target';
+  static const _globalZoomKey = 'global_zoom_level';
+  static const _zoomPrefix = 'zoom_';
 
   Future<String> getMasterCode() async {
     final config = await getScanConfig();
@@ -322,6 +324,16 @@ class PrefsService {
     } catch (_) {
       return {'ok': 0, 'ng': 0};
     }
+  }
+
+  Future<void> saveZoomLevel(double level) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_globalZoomKey, level);
+  }
+
+  Future<double> getZoomLevel() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getDouble(_globalZoomKey) ?? 0.0;
   }
 
   String _signatureForCodes(List<String> codes) {
