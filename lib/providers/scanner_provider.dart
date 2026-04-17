@@ -38,6 +38,8 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     autoStart: false,
     facing: CameraFacing.back,
     torchEnabled: false,
+    cameraResolution: const Size(1280, 720),
+    autoZoom: false,
     // Use unlimited speed for faster response
     detectionSpeed: ScannerUtils.detectionSpeed,
     detectionTimeoutMs:
@@ -49,6 +51,8 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
       BarcodeFormat.qrCode,
     ],
   );
+
+  double zoomLevel = 0.0;
 
   static const Duration _scanCooldown = Duration(milliseconds: 150);
   static const Duration _duplicateWindow = Duration(milliseconds: 350);
@@ -131,6 +135,12 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     await scannerController.toggleTorch();
     torchOn = !torchOn;
     notifyListeners();
+  }
+
+  void setZoomLevel(double level) {
+    zoomLevel = level.clamp(0.0, 1.0);
+    notifyListeners();
+    unawaited(scannerController.setZoomScale(zoomLevel));
   }
 
   Future<void> onDetect(BarcodeCapture capture) async {

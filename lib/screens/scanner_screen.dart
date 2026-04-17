@@ -22,10 +22,17 @@ class ScannerScreen extends StatelessWidget {
   }
 }
 
-class _ScannerView extends StatelessWidget {
+class _ScannerView extends StatefulWidget {
   const _ScannerView({required this.config});
 
   final ScanConfig config;
+
+  @override
+  State<_ScannerView> createState() => _ScannerViewState();
+}
+
+class _ScannerViewState extends State<_ScannerView> {
+  double _baseZoomLevel = 0.0;
 
   @override
   Widget build(BuildContext context) {
@@ -48,19 +55,68 @@ class _ScannerView extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                MobileScanner(
-                  controller: provider.scannerController,
-                  fit: BoxFit.cover,
-                  onDetect: provider.onDetect,
+                GestureDetector(
+                  onScaleStart: (_) {
+                    _baseZoomLevel = provider.zoomLevel;
+                  },
+                  onScaleUpdate: (details) {
+                    // Normalize zoom increment relative to 0.0-1.0 range
+                    final newZoom = (_baseZoomLevel + (details.scale - 1.0) * 0.2).clamp(0.0, 1.0);
+                    provider.setZoomLevel(newZoom);
+                  },
+                  child: MobileScanner(
+                    controller: provider.scannerController,
+                    fit: BoxFit.cover,
+                    onDetect: provider.onDetect,
+                  ),
                 ),
                 const _RoiOverlay(),
+                Positioned(
+                  bottom: 24,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.black45,
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _ZoomButton(
+                            label: '1x',
+                            isActive: provider.zoomLevel == 0.0,
+                            onTap: () => provider.setZoomLevel(0.0),
+                          ),
+                          _ZoomButton(
+                            label: '1.25x',
+                            isActive: provider.zoomLevel == 0.2,
+                            onTap: () => provider.setZoomLevel(0.2),
+                          ),
+                          _ZoomButton(
+                            label: '1.5x',
+                            isActive: provider.zoomLevel == 0.5,
+                            onTap: () => provider.setZoomLevel(0.5),
+                          ),
+                          _ZoomButton(
+                            label: '2x',
+                            isActive: provider.zoomLevel == 1.0,
+                            onTap: () => provider.setZoomLevel(1.0),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
           Expanded(
             flex: 5,
             child: Container(
-              color: config.colorValue != null ? Color(config.colorValue!) : null,
+              color: widget.config.colorValue != null ? Color(widget.config.colorValue!) : null,
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: Column(
@@ -78,9 +134,9 @@ class _ScannerView extends StatelessWidget {
                           const SizedBox(height: 8),
                           _InfoTile(
                             title: 'Yêu cầu',
-                            value: config.requiredCodes.isEmpty
+                            value: widget.config.requiredCodes.isEmpty
                                 ? '(chưa đăng ký)'
-                                : config.requiredCodes.join(' + '),
+                                : widget.config.requiredCodes.join(' + '),
                           ),
                           const SizedBox(height: 8),
                           _InfoTile(
@@ -185,6 +241,44 @@ class _InfoTile extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ZoomButton extends StatelessWidget {
+  const _ZoomButton({
+    required this.label,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: isActive ? Colors.greenAccent : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isActive ? Colors.black87 : Colors.white,
+              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+              fontSize: 13,
+            ),
+          ),
+        ),
       ),
     );
   }
