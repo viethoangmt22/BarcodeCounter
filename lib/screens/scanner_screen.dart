@@ -127,24 +127,6 @@ class _ScannerViewState extends State<_ScannerView> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _InfoTile(
-                            title: 'Mã cuối',
-                            value: provider.lastScannedCode,
-                          ),
-                          const SizedBox(height: 8),
-                          _InfoTile(
-                            title: 'Yêu cầu',
-                            value: widget.config.requiredCodes.isEmpty
-                                ? '(chưa đăng ký)'
-                                : widget.config.requiredCodes.join(' + '),
-                          ),
-                          const SizedBox(height: 8),
-                          _InfoTile(
-                            title: 'Trạng thái',
-                            value: provider.statusLabel,
-                            valueColor: provider.statusColor,
-                          ),
-                          const SizedBox(height: 8),
                           Row(
                             children: [
                               Expanded(
@@ -162,6 +144,24 @@ class _ScannerViewState extends State<_ScannerView> {
                                 ),
                               ),
                             ],
+                          ),
+                          const SizedBox(height: 8),
+                          _InfoTile(
+                            title: 'Mã cuối',
+                            value: provider.lastScannedCode,
+                          ),
+                          const SizedBox(height: 8),
+                          _InfoTile(
+                            title: 'Yêu cầu',
+                            value: widget.config.requiredCodes.isEmpty
+                                ? '(chưa đăng ký)'
+                                : widget.config.requiredCodes.join(' + '),
+                          ),
+                          const SizedBox(height: 8),
+                          _InfoTile(
+                            title: 'Trạng thái',
+                            value: provider.statusLabel,
+                            valueColor: provider.statusColor,
                           ),
                         ],
                       ),

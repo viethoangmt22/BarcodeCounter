@@ -26,14 +26,14 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     final counts = await _prefsService.getPresetCounts(config.signature);
     totalValidCount = counts['ok'] ?? 0;
     totalInvalidCount = counts['ng'] ?? 0;
-    
+
     // Update bag/box counts based on loaded OK count
     bagCount = totalValidCount % config.bagTarget;
     boxCount = totalValidCount % config.boxTarget;
-    
+
     // Load previous global zoom level
     zoomLevel = await _prefsService.getZoomLevel();
-    
+
     notifyListeners();
   }
 
@@ -45,8 +45,8 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     autoZoom: false,
     // Use unlimited speed for faster response
     detectionSpeed: ScannerUtils.detectionSpeed,
-    detectionTimeoutMs:
-        ScannerUtils.detectionTimeoutMs, // Restored to detectionTimeoutMs for v7.2.0
+    detectionTimeoutMs: ScannerUtils
+        .detectionTimeoutMs, // Restored to detectionTimeoutMs for v7.2.0
     formats: [
       BarcodeFormat.ean13,
       BarcodeFormat.code128,
@@ -59,10 +59,19 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   static const Duration _scanCooldown = Duration(milliseconds: 150);
   static const Duration _duplicateWindow = Duration(milliseconds: 350);
+  static const int _validConfirmHits = 2;
+  static const int _invalidConfirmHits = 4;
+  static const Duration _invalidStabilizationWindow = Duration(
+    milliseconds: 500,
+  );
+  static const Duration _invalidAfterRequiredSeenGrace = Duration(
+    milliseconds: 1200,
+  );
   static const Duration _sameCodeRearmGap = Duration(
     milliseconds: 250,
   ); // Reduced for faster re-scanning
-  static const Duration _twoCodeClearGap = Duration(milliseconds: 600);
+  static const Duration _sameCodeOutOfFrameGap = Duration(milliseconds: 1500);
+  static const Duration _twoCodeClearGap = Duration(milliseconds: 1500);
   static const Duration _sameCodeFallbackGapWithoutCenter = Duration(
     milliseconds: 1200,
   );
@@ -86,6 +95,7 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   String? _candidateCode;
   int _candidateHits = 0;
+  DateTime _candidateStartedAt = DateTime.fromMillisecondsSinceEpoch(0);
   String? _lastProcessedCode;
   String? _lockedCode;
   final Map<String, DateTime> _lastSeenByKey = {};
@@ -93,6 +103,7 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
   final Map<String, DateTime> _recentCodes = {};
   bool _awaitingTwoCodeClear = false;
   DateTime _lastRequiredSeenAt = DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime _lastRequiredCodeSeenAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   Future<void> start() async {
     if (scanningActive && !ngLocked) {
@@ -172,14 +183,19 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
 
     var matchedRequiredInFrame = 0;
+    final hasRequiredInFrame = config.requiredCodes.any(detectedCodes.contains);
+    if (hasRequiredInFrame) {
+      _lastRequiredCodeSeenAt = now;
+    }
+
     if (config.requiresTwoCodes) {
       matchedRequiredInFrame = config.requiredCodes
           .where((code) => detectedCodes.contains(code))
           .length;
 
       // Rearm gate for 2-barcode mode:
-      // after one valid count, require a clear gap (no required code visible)
-      // before allowing the next count.
+      // after one valid count, require both required codes to stay out of frame
+      // long enough before allowing the next count.
       if (_awaitingTwoCodeClear) {
         final clearGapPassed =
             now.difference(_lastRequiredSeenAt) >= _twoCodeClearGap;
@@ -209,36 +225,36 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
         : detectedCodes.toSet();
     final frameSignature = detectedCodes.join('|');
     final unexpectedInFrame = config.requiresTwoCodes
-      ? detectedCodes
-          .where((code) => !config.requiredCodes.contains(code))
-          .toList()
+        ? detectedCodes
+              .where((code) => !config.requiredCodes.contains(code))
+              .toList()
         : <String>[];
     unexpectedInFrame.sort();
     final hasUnexpectedInFrame = unexpectedInFrame.isNotEmpty;
     final isMixedRequiredAndUnexpectedInFrame =
-      config.requiresTwoCodes &&
-      matchedRequiredInFrame > 0 &&
-      hasUnexpectedInFrame;
+        config.requiresTwoCodes &&
+        matchedRequiredInFrame > 0 &&
+        hasUnexpectedInFrame;
     final isValid =
-      !isMixedRequiredAndUnexpectedInFrame &&
-      config.matchesDetectedCodes(effectiveCodes);
+        !isMixedRequiredAndUnexpectedInFrame &&
+        config.matchesDetectedCodes(effectiveCodes);
     final matchedRequired = config.requiredCodes
         .where((code) => effectiveCodes.contains(code))
         .length;
     final okProcessingKey = 'ok:${config.requiredCodes.join('|')}';
 
     if (config.requiresTwoCodes &&
-      matchedRequired > 0 &&
-      !isValid &&
-      !hasUnexpectedInFrame) {
+        matchedRequired > 0 &&
+        !isValid &&
+        !hasUnexpectedInFrame) {
       return;
     }
 
     final processingKey = isValid
-      ? okProcessingKey
-      : hasUnexpectedInFrame
-      ? 'ng:unexpected:${unexpectedInFrame.join('|')}'
-      : 'ng:$frameSignature';
+        ? okProcessingKey
+        : hasUnexpectedInFrame
+        ? 'ng:unexpected:${unexpectedInFrame.join('|')}'
+        : 'ng:$frameSignature';
     final lockedCodeCenter =
         !config.requiresTwoCodes && detectedCodes.length == 1
         ? _findCenterForCode(capture, detectedCodes.first)
@@ -249,22 +265,30 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_lockedCode == processingKey) {
       final lastSeen = _lastSeenByKey[processingKey];
       _lastSeenByKey[processingKey] = now;
+      final requiredGap = config.requiresTwoCodes
+          ? _sameCodeRearmGap
+          : _sameCodeOutOfFrameGap;
 
       if (!config.requiresTwoCodes) {
         final acceptedCenter = _acceptedCenterByKey[processingKey];
-        if (_isSameSpot(acceptedCenter, lockedCodeCenter)) {
+        if (_isSameSpot(acceptedCenter, lockedCodeCenter) &&
+            lastSeen != null &&
+            now.difference(lastSeen) < requiredGap) {
           return;
         }
       }
 
-      final requiredGap =
+      final fallbackGap = config.requiresTwoCodes
+          ? _sameCodeRearmGap
+          : _sameCodeFallbackGapWithoutCenter;
+      final gapToUse =
           (!config.requiresTwoCodes &&
               (_acceptedCenterByKey[processingKey] == null ||
                   lockedCodeCenter == null))
-          ? _sameCodeFallbackGapWithoutCenter
-          : _sameCodeRearmGap;
+          ? fallbackGap
+          : requiredGap;
 
-      if (lastSeen != null && now.difference(lastSeen) < requiredGap) {
+      if (lastSeen != null && now.difference(lastSeen) < gapToUse) {
         return;
       }
       _lockedCode = null;
@@ -275,10 +299,26 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     } else {
       _candidateCode = processingKey;
       _candidateHits = 1;
+      _candidateStartedAt = now;
     }
 
-    if (_candidateHits < 2) {
+    final requiredConfirmHits = isValid
+        ? _validConfirmHits
+        : _invalidConfirmHits;
+    if (_candidateHits < requiredConfirmHits) {
       return;
+    }
+
+    if (!isValid) {
+      if (now.difference(_candidateStartedAt) < _invalidStabilizationWindow) {
+        return;
+      }
+
+      if (now.difference(_lastRequiredCodeSeenAt) <
+          _invalidAfterRequiredSeenGrace) {
+        _candidateHits = 0;
+        return;
+      }
     }
 
     _candidateHits = 0;
@@ -337,7 +377,8 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
         continue;
       }
 
-      if (!imageSize.isEmpty && ScannerUtils.isInsideCenterRoi(barcode, imageSize)) {
+      if (!imageSize.isEmpty &&
+          ScannerUtils.isInsideCenterRoi(barcode, imageSize)) {
         return center;
       }
 
@@ -367,7 +408,13 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
 
     unawaited(ttsService.speak(config.okMessage));
-    unawaited(_prefsService.savePresetCounts(config.signature, totalValidCount, totalInvalidCount));
+    unawaited(
+      _prefsService.savePresetCounts(
+        config.signature,
+        totalValidCount,
+        totalInvalidCount,
+      ),
+    );
 
     String? instruction;
     for (final level in config.alertLevels) {
@@ -397,7 +444,13 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     status = ScanResultStatus.ng;
     notifyListeners();
     unawaited(ttsService.speak(config.ngMessage));
-    unawaited(_prefsService.savePresetCounts(config.signature, totalValidCount, totalInvalidCount));
+    unawaited(
+      _prefsService.savePresetCounts(
+        config.signature,
+        totalValidCount,
+        totalInvalidCount,
+      ),
+    );
 
     try {
       await _csvService.appendScanLog(
@@ -421,12 +474,14 @@ class ScannerProvider extends ChangeNotifier with WidgetsBindingObserver {
     status = ScanResultStatus.idle;
     _candidateCode = null;
     _candidateHits = 0;
+    _candidateStartedAt = DateTime.fromMillisecondsSinceEpoch(0);
     _lastProcessedCode = null;
     _lockedCode = null;
     _lastSeenByKey.clear();
     _acceptedCenterByKey.clear();
     _awaitingTwoCodeClear = false;
     _lastRequiredSeenAt = DateTime.fromMillisecondsSinceEpoch(0);
+    _lastRequiredCodeSeenAt = DateTime.fromMillisecondsSinceEpoch(0);
     _lastAcceptedAt = DateTime.fromMillisecondsSinceEpoch(0);
     _lastProcessedAt = DateTime.fromMillisecondsSinceEpoch(0);
     _recentCodes.clear();
