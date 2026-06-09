@@ -22,14 +22,18 @@ class ScanConfig {
     required this.okMessage,
     required this.ngMessage,
     required this.alertLevels,
+    this.scanGapMs = defaultScanGapMs,
     this.colorValue,
     this.productName,
   });
+
+  static const int defaultScanGapMs = 1500;
 
   final List<String> requiredCodes;
   final String okMessage;
   final String ngMessage;
   final List<ScanAlertLevel> alertLevels;
+  final int scanGapMs;
   final int? colorValue;
   final String? productName;
 
@@ -57,6 +61,8 @@ class ScanConfig {
 
   int get boxTarget => alertLevels.length > 1 ? alertLevels[1].quantity : 100;
 
+  Duration get scanGapDuration => Duration(milliseconds: scanGapMs);
+
   factory ScanConfig.defaults() {
     return const ScanConfig(
       requiredCodes: [],
@@ -69,6 +75,7 @@ class ScanConfig {
         ),
         ScanAlertLevel(quantity: 100, message: 'Đủ 100 cái rồi đóng thùng đi'),
       ],
+      scanGapMs: defaultScanGapMs,
       colorValue: null,
       productName: null,
     );
@@ -80,6 +87,7 @@ class ScanConfig {
       'okMessage': okMessage,
       'ngMessage': ngMessage,
       'alertLevels': alertLevels.map((level) => level.toJson()).toList(),
+      'scanGapMs': scanGapMs,
       'colorValue': colorValue,
       'productName': productName,
     };
@@ -102,12 +110,15 @@ class ScanConfig {
               .map(ScanAlertLevel.fromJson)
               .toList()
         : const <ScanAlertLevel>[];
+    final scanGapMs =
+        (json['scanGapMs'] as num?)?.toInt() ?? ScanConfig.defaultScanGapMs;
 
     return ScanConfig(
       requiredCodes: codes.toList(),
       okMessage: (json['okMessage'] as String?) ?? '',
       ngMessage: (json['ngMessage'] as String?) ?? '',
       alertLevels: levels.isEmpty ? ScanConfig.defaults().alertLevels : levels,
+      scanGapMs: scanGapMs,
       colorValue: json['colorValue'] as int?,
       productName: json['productName'] as String?,
     );

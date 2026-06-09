@@ -38,6 +38,7 @@ class _SetupScreenState extends State<SetupScreen> {
   final _okMessageController = TextEditingController();
   final _ngMessageController = TextEditingController();
   final _productNameController = TextEditingController();
+  final _scanGapMsController = TextEditingController();
   final _prefsService = PrefsService();
   final _csvService = CsvService();
   final List<_AlertLevelDraft> _levelDrafts = [];
@@ -81,6 +82,7 @@ class _SetupScreenState extends State<SetupScreen> {
       _okMessageController.text = ScanConfig.defaults().okMessage;
       _ngMessageController.text = ScanConfig.defaults().ngMessage;
       _productNameController.clear();
+      _scanGapMsController.text = ScanConfig.defaultScanGapMs.toString();
       _selectedColorValue = null;
       _requiredBarcodeCount = 1;
 
@@ -124,6 +126,7 @@ class _SetupScreenState extends State<SetupScreen> {
         _okMessageController.text = config.okMessage;
         _ngMessageController.text = config.ngMessage;
         _productNameController.text = config.productName ?? '';
+        _scanGapMsController.text = config.scanGapMs.toString();
         _levelDrafts
           ..clear()
           ..addAll(
@@ -165,6 +168,7 @@ class _SetupScreenState extends State<SetupScreen> {
       _okMessageController.text = preset.config.okMessage;
       _ngMessageController.text = preset.config.ngMessage;
       _productNameController.text = preset.config.productName ?? '';
+      _scanGapMsController.text = preset.config.scanGapMs.toString();
 
       for (final draft in _levelDrafts) {
         draft.dispose();
@@ -269,6 +273,7 @@ class _SetupScreenState extends State<SetupScreen> {
       okMessage: okMessage,
       ngMessage: ngMessage,
       alertLevels: levels,
+      scanGapMs: int.parse(_scanGapMsController.text.trim()),
       colorValue: _selectedColorValue,
       productName: _productNameController.text.trim(),
     );
@@ -584,6 +589,7 @@ class _SetupScreenState extends State<SetupScreen> {
     _okMessageController.dispose();
     _ngMessageController.dispose();
     _productNameController.dispose();
+    _scanGapMsController.dispose();
     for (final draft in _levelDrafts) {
       draft.dispose();
     }
@@ -1008,6 +1014,33 @@ class _SetupScreenState extends State<SetupScreen> {
                       label: const Text('Quét 2 mã mẫu'),
                     ),
                   ],
+                  const SizedBox(height: 24),
+                  Text(
+                    'Delay chong quet nham',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _scanGapMsController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Khoang trong giua 2 lan quet (ms)',
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    validator: (value) {
+                      final parsed = int.tryParse(value?.trim() ?? '');
+                      if (parsed == null) {
+                        return 'Vui long nhap so mili-giay';
+                      }
+                      if (parsed < 0 || parsed > 5000) {
+                        return 'Gia tri tu 0 den 5000 ms';
+                      }
+                      return null;
+                    },
+                  ),
                   const SizedBox(height: 24),
                   Row(
                     children: [

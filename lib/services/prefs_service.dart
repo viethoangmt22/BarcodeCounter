@@ -10,13 +10,15 @@ class PrefsService {
   static const _okMessageKey = 'ok_message';
   static const _ngMessageKey = 'ng_message';
   static const _levelsKey = 'alert_levels';
+  static const _scanGapMsKey = 'scan_gap_ms';
   static const _colorValueKey = 'color_value';
+  static const _productNameKey = 'product_name';
   static const _adminPasswordKey = 'admin_password';
   static const _presetsKey = 'scan_presets';
   static const _legacyBagTargetKey = 'bag_target';
   static const _legacyBoxTargetKey = 'box_target';
   static const _globalZoomKey = 'global_zoom_level';
-  static const _zoomPrefix = 'zoom_';
+  static const _scanModeKey = 'scan_mode';
 
   Future<String> getMasterCode() async {
     final config = await getScanConfig();
@@ -37,14 +39,19 @@ class PrefsService {
 
     final levelsRaw = prefs.getString(_levelsKey);
     final levels = _parseLevels(levelsRaw, prefs);
+    final scanGapMs =
+        prefs.getInt(_scanGapMsKey) ?? ScanConfig.defaultScanGapMs;
     final colorValue = prefs.getInt(_colorValueKey);
+    final productName = prefs.getString(_productNameKey);
 
     return ScanConfig(
       requiredCodes: requiredCodes,
       okMessage: okMessage,
       ngMessage: ngMessage,
       alertLevels: levels,
+      scanGapMs: scanGapMs,
       colorValue: colorValue,
+      productName: productName,
     );
   }
 
@@ -145,10 +152,17 @@ class PrefsService {
       _levelsKey,
       jsonEncode(normalizedLevels.map((e) => e.toJson()).toList()),
     );
+    await prefs.setInt(_scanGapMsKey, config.scanGapMs);
     if (config.colorValue != null) {
       await prefs.setInt(_colorValueKey, config.colorValue!);
     } else {
       await prefs.remove(_colorValueKey);
+    }
+
+    if (config.productName != null && config.productName!.isNotEmpty) {
+      await prefs.setString(_productNameKey, config.productName!);
+    } else {
+      await prefs.remove(_productNameKey);
     }
   }
 
@@ -334,6 +348,16 @@ class PrefsService {
   Future<double> getZoomLevel() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getDouble(_globalZoomKey) ?? 0.0;
+  }
+
+  Future<void> saveScanMode(String mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_scanModeKey, mode);
+  }
+
+  Future<String> getScanMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_scanModeKey) ?? 'camera';
   }
 
   String _signatureForCodes(List<String> codes) {

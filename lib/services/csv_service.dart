@@ -46,7 +46,8 @@ class CsvService {
         'OK Message',
         'NG Message',
         'Color',
-        'Alert Levels'
+        'Alert Levels',
+        'Scan Gap Ms',
       ]
     ];
 
@@ -71,6 +72,7 @@ class CsvService {
         preset.config.ngMessage,
         colorName,
         alertLevelsStr,
+        preset.config.scanGapMs,
       ]);
     }
 
@@ -119,6 +121,10 @@ class CsvService {
       final String ngMsg = row.length > 4 ? row[4].toString().trim() : 'SAI';
       final String colorName = row.length > 5 ? row[5].toString().trim() : '';
       final String alertLevelsStr = row.length > 6 ? row[6].toString().trim() : '';
+      final int scanGapMs = row.length > 7
+          ? int.tryParse(row[7].toString().trim()) ??
+              ScanConfig.defaultScanGapMs
+          : ScanConfig.defaultScanGapMs;
 
       if (barcode1.isEmpty) continue;
 
@@ -157,6 +163,7 @@ class CsvService {
           okMessage: okMsg,
           ngMessage: ngMsg,
           alertLevels: alertLevels,
+          scanGapMs: scanGapMs,
           productName: productName,
           colorValue: colorValue,
         ),

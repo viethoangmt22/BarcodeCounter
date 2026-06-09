@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import '../models/scan_config.dart';
 import '../services/prefs_service.dart';
 import '../widgets/hold_to_reset_button.dart';
+import '../widgets/usb_preset_scan_dialog.dart';
 import 'admin_gate_screen.dart';
 import 'preset_scan_screen.dart';
 import 'scanner_screen.dart';
 import 'setup_screen.dart';
+import 'usb_scanner_screen.dart';
 
 class UserHomeScreen extends StatefulWidget {
   const UserHomeScreen({super.key});
@@ -23,6 +25,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   String? _activePresetName;
   int _currentOk = 0;
   int _currentNg = 0;
+  String _scanMode = 'camera';
 
   @override
   void initState() {
@@ -36,6 +39,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
         _loading = true;
       });
 
+      final scanMode = await _prefsService.getScanMode();
       final lastUsed = await _prefsService.getLastUsedPreset();
 
       if (!mounted) {
@@ -46,6 +50,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
         final counts =
             await _prefsService.getPresetCounts(lastUsed.config.signature);
         setState(() {
+          _scanMode = scanMode;
           _config = lastUsed.config;
           _activePresetName = lastUsed.name;
           _currentOk = counts['ok'] ?? 0;
@@ -62,6 +67,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       }
 
       setState(() {
+        _scanMode = scanMode;
         _config = config;
         _activePresetName = null;
         _currentOk = counts['ok'] ?? 0;
@@ -76,6 +82,14 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
         });
       }
     }
+  }
+
+  Future<void> _onModeChanged(String newMode) async {
+    if (_scanMode == newMode) return;
+    setState(() {
+      _scanMode = newMode;
+    });
+    await _prefsService.saveScanMode(newMode);
   }
 
   Future<void> _openAdmin() async {
@@ -100,18 +114,34 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       return;
     }
 
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => ScannerScreen(config: config)),
-    );
+    if (_scanMode == 'usb') {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => UsbScannerScreen(config: config)),
+      );
+    } else {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => ScannerScreen(config: config)),
+      );
+    }
     await _loadConfig(); // Refresh counts when back
   }
 
   Future<void> _scanPresetSample() async {
-    final sampleCodes = await Navigator.of(context).push<List<String>>(
-      MaterialPageRoute<List<String>>(
-        builder: (_) => const PresetScanScreen(),
-      ),
-    );
+    List<String>? sampleCodes;
+
+    if (_scanMode == 'usb') {
+      sampleCodes = await showDialog<List<String>>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const UsbPresetScanDialog(),
+      );
+    } else {
+      sampleCodes = await Navigator.of(context).push<List<String>>(
+        MaterialPageRoute<List<String>>(
+          builder: (_) => const PresetScanScreen(),
+        ),
+      );
+    }
 
     if (!mounted || sampleCodes == null || sampleCodes.isEmpty) {
       return;
@@ -162,6 +192,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final hasConfig = _config != null && _config!.requiredCodes.isNotEmpty;
+    final isUsb = _scanMode == 'usb';
 
     return Scaffold(
       appBar: AppBar(
@@ -199,6 +230,13 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                   ),
                   const SizedBox(height: 16),
 
+                  // Mode Selector (Camera vs USB HID)
+                  ModeSelector(
+                    selectedMode: _scanMode,
+                    onModeChanged: _onModeChanged,
+                  ),
+                  const SizedBox(height: 16),
+
                   // Status Card with colors
                   _StatusCard(
                     isReady: hasConfig,
@@ -229,8 +267,10 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                 children: [
                   OutlinedButton.icon(
                     onPressed: _scanPresetSample,
-                    icon: const Icon(Icons.qr_code_scanner),
-                    label: const Text('QUÉT MÃ MẪU (LOAD PRESET)'),
+                    icon: Icon(isUsb ? Icons.usb : Icons.qr_code_scanner),
+                    label: Text(
+                      isUsb ? 'QUÉT MÃ MẪU QUA USB (LOAD PRESET)' : 'QUÉT MÃ MẪU (LOAD PRESET)',
+                    ),
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size.fromHeight(48),
                     ),
@@ -249,7 +289,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                         letterSpacing: 1.1,
                       ),
                     ),
-                    child: const Text('BẮT ĐẦU QUÉT'),
+                    child: Text(isUsb ? 'BẮT ĐẦU QUÉT (USB HID)' : 'BẮT ĐẦU QUÉT'),
                   ),
                 ],
               ),
@@ -333,7 +373,7 @@ class _PresetDetailsCard extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             activePresetName ??
-                (hasConfig ? (config!.productName ?? 'Tên n/a') : 'Chưa chọn preset'),
+                (hasConfig ? (config!.productName ?? 'N/A') : 'Chưa chọn preset'),
             style: theme.textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.bold,
               color: hasConfig ? Colors.black87 : Colors.grey.shade500,
@@ -518,6 +558,118 @@ class _StatusCard extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ModeSelector extends StatelessWidget {
+  const ModeSelector({
+    required this.selectedMode,
+    required this.onModeChanged,
+    super.key,
+  });
+
+  final String selectedMode;
+  final ValueChanged<String> onModeChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isCamera = selectedMode == 'camera';
+
+    return Container(
+      height: 54,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(27),
+        border: Border.all(color: Colors.grey.shade200, width: 1.5),
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Stack(
+        children: [
+          AnimatedAlign(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+            alignment: isCamera ? Alignment.centerLeft : Alignment.centerRight,
+            child: FractionallySizedBox(
+              widthFactor: 0.5,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary,
+                  borderRadius: BorderRadius.circular(23),
+                  boxShadow: [
+                    BoxShadow(
+                      color: theme.colorScheme.primary.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onModeChanged('camera'),
+                  child: Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.camera_alt_outlined,
+                          color: isCamera ? Colors.white : Colors.grey.shade600,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'QUÉT CAMERA',
+                          style: TextStyle(
+                            color: isCamera ? Colors.white : Colors.grey.shade700,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onModeChanged('usb'),
+                  child: Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.usb_outlined,
+                          color: !isCamera ? Colors.white : Colors.grey.shade600,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'QUÉT USB HID',
+                          style: TextStyle(
+                            color: !isCamera ? Colors.white : Colors.grey.shade700,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
